@@ -1,0 +1,85 @@
+[
+  {
+    "id": "food",
+    "name": "美食",
+    "icon": "🍜",
+    "children": [
+      { "name": "火锅", "keyword": "火锅" },
+      { "name": "烧烤", "keyword": "烧烤" },
+      { "name": "川菜", "keyword": "川菜" },
+      { "name": "粤菜", "keyword": "粤菜" },
+      { "name": "咖啡", "keyword": "咖啡厅" },
+      { "name": "奶茶", "keyword": "奶茶" },
+      { "name": "面馆", "keyword": "面馆" },
+      { "name": "快餐", "keyword": "快餐" }
+    ]
+  },
+  {
+    "id": "fun",
+    "name": "娱乐",
+    "icon": "🎮",
+    "children": [
+      { "name": "KTV", "keyword": "KTV" },
+      { "name": "电影院", "keyword": "电影院" },
+      { "name": "酒吧", "keyword": "酒吧" },
+      { "name": "网咖", "keyword": "网吧" },
+      { "name": "台球", "keyword": "台球" },
+      { "name": "健身房", "keyword": "健身房" }
+    ]
+  },
+  {
+    "id": "travel",
+    "name": "旅游",
+    "icon": "🏞️",
+    "children": [
+      { "name": "景点", "keyword": "风景名胜" },
+      { "name": "公园", "keyword": "公园" },
+      { "name": "博物馆", "keyword": "博物馆" },
+      { "name": "古迹", "keyword": "古迹" },
+      { "name": "温泉", "keyword": "温泉" }
+    ]
+  },
+  {
+    "id": "hospital",
+    "name": "医院",
+    "icon": "🏥",
+    "children": [
+      { "name": "综合医院", "keyword": "综合医院" },
+      { "name": "药店", "keyword": "药店" },
+      { "name": "诊所", "keyword": "诊所" },
+      { "name": "口腔医院", "keyword": "口腔医院" }
+    ]
+  },
+  {
+    "id": "market",
+    "name": "超市",
+    "icon": "🛒",
+    "children": [
+      { "name": "超市", "keyword": "超市" },
+      { "name": "便利店", "keyword": "便利店" },
+      { "name": "商场", "keyword": "购物中心" },
+      { "name": "菜市场", "keyword": "菜市场" }
+    ]
+  },
+  {
+    "id": "hotel",
+    "name": "酒店",
+    "icon": "🏨",
+    "children": [
+      { "name": "酒店", "keyword": "酒店" },
+      { "name": "民宿", "keyword": "民宿" },
+      { "name": "快捷酒店", "keyword": "快捷酒店" }
+    ]
+  },
+  {
+    "id": "school",
+    "name": "学校",
+    "icon": "🏫",
+    "children": [
+      { "name": "大学", "keyword": "大学" },
+      { "name": "中学", "keyword": "中学" },
+      { "name": "小学", "keyword": "小学" },
+      { "name": "幼儿园", "keyword": "幼儿园" }
+    ]
+  }
+]

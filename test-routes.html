@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>测试路由</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .route-btn {
+      display: block;
+      margin: 10px 0;
+      padding: 10px 20px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .route-btn:hover { background: #ddd; }
+  </style>
+</head>
+<body>
+  <h1>测试不同路径</h1>
+  <button class="route-btn" onclick="window.location.href='/'">访问 /</button>
+  <button class="route-btn" onclick="window.location.href='/index'">访问 /index</button>
+  <button class="route-btn" onclick="window.location.href='/routes'">访问 /routes</button>
+  <button class="route-btn" onclick="window.location.href='/about'">访问 /about</button>
+  
+  <div id="result"></div>
+  
+  <script>
+    window.onpopstate = function() {
+      document.getElementById('result').innerHTML = 
+        '<p>当前路径: ' + window.location.pathname + '</p>';
+    }
+    document.getElementById('result').innerHTML = 
+      '<p>当前路径: ' + window.location.pathname + '</p>';
+  </script>
+</body>
+</html>
