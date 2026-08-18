@@ -6,6 +6,19 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+
+  /* 应用类 UI 默认禁止文本选中：点击/拖拽不再出现输入光标（I-beam）与选区；可编辑元素单独恢复 */
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 @layer components {
@@ -31,82 +44,73 @@
   .text-balance {
     text-wrap: balance;
   }
-}
 
-/* ===== 高德地图自定义覆盖物样式 ===== */
+  /* ===== 打卡拖拽条（range input）滑块样式 ===== */
+  .range-emerald::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #10b981;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(2, 6, 23, 0.35);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .range-emerald::-webkit-slider-thumb:hover {
+    transform: scale(1.12);
+  }
+  .range-emerald::-webkit-slider-thumb:active {
+    transform: scale(1.05);
+  }
+  .range-emerald::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #10b981;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(2, 6, 23, 0.35);
+    cursor: pointer;
+  }
+  .range-emerald:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-/* 起点 / 终点圆形标记 */
-.route-marker {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-.route-marker--start {
-  background: #059669;
-}
+  /* ===== 日期选择：触发元素为按钮（非 input），点击只开合自绘日历面板，不会选中框内日期文字 ===== */
+  .date-input {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 
-/* POI 编号标记 */
-.poi-marker {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-  background: #64748b;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: transform 0.15s;
-}
-.poi-marker:hover {
-  transform: scale(1.12);
-}
-.poi-marker--active {
-  background: #1677ff;
-  transform: scale(1.25);
-  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.25);
-}
+  /* ===== 骨架屏微光流动：渐变扫过代替静态 pulse ===== */
+  @keyframes shimmer {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f5f7fa 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
 
-/* 输入提示(AutoComplete)下拉面板 */
-#start-tip .amap-suggestions,
-#start-tip ul {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
-  max-height: 320px;
-  overflow-y: auto;
-}
-#start-tip .amap-suggestions li,
-#start-tip ul li {
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #374151;
-  cursor: pointer;
-}
-#start-tip .amap-suggestions li:hover,
-#start-tip ul li:hover {
-  background: #eff6ff;
-  color: #1677ff;
+  /* ===== 空状态图标漂浮：微幅上下往复，让空页面"活"起来 ===== */
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
 }

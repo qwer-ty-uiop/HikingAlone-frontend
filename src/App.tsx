@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MapPin, CaretDown, NavigationArrow, Barbell } from '@phosphor-icons/react'
-import PoiMapApp from './map/PoiMapApp'
+import { MapPin, CaretDown, Barbell } from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
 import type { HomeBanner, HomeData, NavMenu } from './types'
 
@@ -24,11 +23,6 @@ function App() {
       setPath(link)
     }
   }, [])
-
-  // 高德地图 POI 探索页
-  if (path === '/map') {
-    return <PoiMapApp />
-  }
 
   // 训练打卡页
   if (path === '/train') {
@@ -183,13 +177,6 @@ function HomePage({ go }: HomePageProps) {
               {topMenus.map(renderNavMenu)}
             </nav>
           </div>
-          <button
-            onClick={() => go('/map')}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white text-sm rounded-full font-medium hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/20 transition-all active:scale-[0.98]"
-          >
-            <NavigationArrow size={14} weight="bold" />
-            地图探索
-          </button>
         </div>
       </header>
 
@@ -237,10 +224,10 @@ function HomePage({ go }: HomePageProps) {
                 {error || '探索未知，挑战自我'}
               </p>
               <button
-                onClick={() => go('/map')}
+                onClick={() => go('/train')}
                 className="px-6 py-3 bg-white text-slate-900 rounded-full font-medium hover:bg-emerald-50 transition-all active:scale-[0.98]"
               >
-                地图探索
+                进入训练
               </button>
             </div>
           </div>
@@ -250,22 +237,8 @@ function HomePage({ go }: HomePageProps) {
           <p className="mt-3 text-sm text-amber-600 text-center">{error}</p>
         )}
 
-        {/* 地图探索入口 */}
-        <section className="mt-10 grid md:grid-cols-2 gap-5">
-          <div className="rounded-3xl bg-white border border-gray-100 shadow-sm p-8">
-            <h2 className="text-2xl font-bold tracking-tight mb-2">地图探索</h2>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6">
-              基于高德地图的 POI 搜索与路径规划：搜索起点、按分类查找周边美食娱乐，
-              一键规划驾车 / 步行 / 公交 / 骑行路线。
-            </p>
-            <button
-              onClick={() => go('/map')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-full font-medium hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20 transition-all active:scale-[0.98]"
-            >
-            <NavigationArrow size={14} weight="bold" />
-            进入地图
-            </button>
-          </div>
+        {/* 训练打卡入口 */}
+        <section className="mt-10">
           <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
             <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
               <Barbell size={22} weight="fill" className="text-emerald-600" />

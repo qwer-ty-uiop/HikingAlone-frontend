@@ -1,17 +1,18 @@
 # ========= 依赖包 =========
 node_modules/
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
 
 # ========= 构建产物 =========
 dist/
+dist-ssr/
 build/
 output/
+.coverage/
+coverage/
 .next/
 .nuxt/
 
 # ========= 本地环境、配置文件 =========
+.env
 .env.local
 .env.*.local
 .env.development.local
@@ -24,22 +25,36 @@ output/
 .idea/
 *.swp
 *.swo
-*.sublime‑project
-*.sublime‑workspace
+*.sublime-project
+*.sublime-workspace
 
 # ========= 操作系统文件 =========
 .DS_Store
 Thumbs.db
 
 # ========= 日志、缓存 =========
-npm‑debug.log*
-yarn‑debug.log*
-pnpm‑debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 *.log
+.vite/
+
+# ========= TypeScript =========
+*.tsbuildinfo
 
 # ========= 测试覆盖率 =========
 coverage/
 
+# ========= 单元测试 / 端到端测试 =========
+cypress/
+playwright/
+test-results/
+
+# ========= 编辑器临时文件 =========
+*.local
+
 # ========= vitepress / storybook 可选 =========
 # .vitepress/dist
-# storybook‑static
+# storybook-static
