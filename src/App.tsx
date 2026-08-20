@@ -1,13 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MapPin, CaretDown, Barbell } from '@phosphor-icons/react'
+import { MapPin, CaretDown, Barbell, UserCircle, SignOut } from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
+import AuthPage from './user/AuthPage'
+import { userApi } from './user/api'
 import type { HomeBanner, HomeData, NavMenu } from './types'
 
 /** 后端统一返回成功状态码 */
 const SUCCESS_CODE = 200
 
+/** 登录态本地存储键：仅存邮箱标识，密码等敏感信息不落 localStorage */
+const AUTH_EMAIL_KEY = 'hikingalone.email'
+
 function App() {
   const [path, setPath] = useState('/')
+  const [email, setEmail] = useState<string | null>(() => localStorage.getItem(AUTH_EMAIL_KEY))
 
   // 监听浏览器历史变化
   useEffect(() => {
@@ -24,13 +30,32 @@ function App() {
     }
   }, [])
 
+  const handleLogin = useCallback((userEmail: string) => {
+    localStorage.setItem(AUTH_EMAIL_KEY, userEmail)
+    setEmail(userEmail)
+    // 登录成功后回到首页
+    go('/')
+  }, [go])
+
+  const handleLogout = useCallback(() => {
+    // 通知服务端使会话失效；失败也继续本地清理（会话可能已过期）
+    userApi.logout().catch(() => {})
+    localStorage.removeItem(AUTH_EMAIL_KEY)
+    setEmail(null)
+    go('/')
+  }, [go])
+
   // 训练打卡页
   if (path === '/train') {
     return <TrainPage go={go} />
   }
 
+  if (path === '/login') {
+    return <AuthPage go={go} onLogin={handleLogin} />
+  }
+
   if (path === '/') {
-    return <HomePage go={go} />
+    return <HomePage go={go} email={email} onLogout={handleLogout} />
   }
 
   // 404页面
@@ -53,9 +78,11 @@ function App() {
 
 interface HomePageProps {
   go: (link: string) => void
+  email: string | null
+  onLogout: () => void
 }
 
-function HomePage({ go }: HomePageProps) {
+function HomePage({ go, email, onLogout }: HomePageProps) {
   const [home, setHome] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -176,6 +203,33 @@ function HomePage({ go }: HomePageProps) {
             <nav className="hidden md:flex items-center gap-1">
               {topMenus.map(renderNavMenu)}
             </nav>
+          </div>
+          {/* 用户区：未登录显示「登录 / 注册」；已登录显示邮箱 + 退出 */}
+          <div className="flex items-center gap-2">
+            {email ? (
+              <>
+                <span className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 text-sm text-slate-600">
+                  <UserCircle size={18} weight="regular" className="text-emerald-600" />
+                  {email}
+                </span>
+                <button
+                  onClick={onLogout}
+                  title="退出登录"
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors active:scale-[0.98]"
+                >
+                  <SignOut size={16} weight="regular" />
+                  <span className="hidden sm:inline">退出</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => go('/login')}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-full font-medium transition-all active:scale-[0.98]"
+              >
+                <UserCircle size={16} weight="regular" />
+                登录 / 注册
+              </button>
+            )}
           </div>
         </div>
       </header>

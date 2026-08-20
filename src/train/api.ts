@@ -13,13 +13,20 @@ import type {
 
 const SUCCESS_CODE = 200
 
-/** 统一请求：校验 Result.code，非 200 抛后端 message，HTTP 失败抛网络错误；no-store 避免 GET 命中缓存导致提交后数据不刷新 */
+/** 统一请求：校验 Result.code，非 200 抛后端 message，HTTP 失败抛网络错误；no-store 避免 GET 命中缓存导致提交后数据不刷新；
+ *  credentials: 'include' 携带 HttpSession Cookie，/train 接口从会话取当前登录用户 */
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     cache: 'no-store',
     ...options,
   })
+  // 401 未登录：会话缺失/过期，跳回登录页
+  if (res.status === 401) {
+    window.location.href = '/login'
+    throw new Error('未登录，请先登录')
+  }
   const result = await res.json()
   if (result.code !== SUCCESS_CODE) {
     throw new Error(result.message || '请求失败')
