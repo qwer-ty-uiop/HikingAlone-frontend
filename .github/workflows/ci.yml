@@ -47,6 +47,8 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dist/*"
           target: "/tmp/hikingalone-frontend/"
+          # scp-action 用 tar 传输并保留 source 目录结构（dist/* 会带 dist/ 层）；strip_components: 1 去掉这层，内容直接落在 target 根
+          strip_components: 1
 
       - name: Deploy to Nginx root
         uses: appleboy/ssh-action@v1.2.0
@@ -55,22 +57,21 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            # 实测：scp 的 source "dist/*" 在 runner 上保留 dist/ 子目录层，内容落在 /tmp/hikingalone-frontend/dist/；
-            # 少数环境可能平铺。兼容两种情况：有 dist/ 则搬其内容，否则直接搬。
+            set -e
+            # strip_components: 1 已拍平 dist/ 层，内容直接落在 /tmp/hikingalone-frontend/（index.html、assets/ 等）
             sudo rm -rf /var/www/hikingalone/*
             sudo mkdir -p /var/www/hikingalone
-            if [ -d /tmp/hikingalone-frontend/dist ]; then
-              sudo mv /tmp/hikingalone-frontend/dist/* /var/www/hikingalone/
-            else
-              sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
-            fi
+            ls -la /tmp/hikingalone-frontend/
+            sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
             # mv 出来的文件属主是 root，nginx worker 以 www-data 运行，需保证可读，否则静态文件 403
             sudo chown -R www-data:www-data /var/www/hikingalone
             sudo chmod -R 755 /var/www/hikingalone
-            ls -la /var/www/hikingalone/
+            test -f /var/www/hikingalone/index.html && echo "index.html deployed OK"
+            ls -la /var/www/hikingalone/ | head -20
 
       # Nginx 配置随代码版本化：推送 main 时同步到服务器，避免"代码加了 /user、/login，服务器配置还是旧的"
-      # scp-action 对单文件 source 会平铺到 target 根（与 dist/* 行为一致），故 cp 路径为 /tmp/hikingalone-nginx/nginx-hikingalone.conf
+      # scp-action 用 tar 保留 source 目录结构，单文件 deploy/nginx-hikingalone.conf 会落在 target/deploy/ 下；
+      # strip_components: 1 去掉 deploy/ 层，cp 路径才是 /tmp/hikingalone-nginx/nginx-hikingalone.conf
       - name: Upload Nginx config
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -79,6 +80,8 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "deploy/nginx-hikingalone.conf"
           target: "/tmp/hikingalone-nginx/"
+          # 同上：去掉 deploy/ 目录层，让文件直接落在 /tmp/hikingalone-nginx/nginx-hikingalone.conf
+          strip_components: 1
 
       - name: Install and reload Nginx
         uses: appleboy/ssh-action@v1.2.0
@@ -87,5 +90,13 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            set -e
+            # 源文件可能因 scp 落点差异不存在，先确认；不存在则直接失败（红），不再被 nginx -t 掩盖
+            ls -la /tmp/hikingalone-nginx/
+            test -f /tmp/hikingalone-nginx/nginx-hikingalone.conf || { echo "nginx conf not uploaded"; exit 1; }
             sudo cp /tmp/hikingalone-nginx/nginx-hikingalone.conf /etc/nginx/conf.d/hikingalone.conf
+            # 校验关键指令确实写入目标，防止 cp 目标路径不对导致线上仍是旧配置
+            grep -q "server_name _" /etc/nginx/conf.d/hikingalone.conf && echo "conf check OK"
             sudo nginx -t && sudo systemctl reload nginx
+            # 指纹验证：新配置的静态资源规则带 immutable 缓存头
+            curl -sI http://127.0.0.1/assets/verify.js | grep -i "cache-control" || echo "WARN: no immutable cache header"
