@@ -53,4 +53,25 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             sudo rm -rf /var/www/hikingalone/*
-            sudo mv /tmp/hikingalone-frontend/dist/* /var/www/hikingalone/
+            # scp 的 source "dist/*" 直接把内容传到 /tmp/hikingalone-frontend/（无 dist 子目录层）
+            sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
+
+      # Nginx 配置随代码版本化：推送 main 时同步到服务器，避免"代码加了 /user、/login，服务器配置还是旧的"
+      - name: Upload Nginx config
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "deploy/nginx-hikingalone.conf"
+          target: "/tmp/hikingalone-frontend/"
+
+      - name: Install and reload Nginx
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            sudo cp /tmp/hikingalone-frontend/nginx-hikingalone.conf /etc/nginx/conf.d/hikingalone.conf
+            sudo nginx -t && sudo systemctl reload nginx
