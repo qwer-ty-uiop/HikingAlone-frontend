@@ -55,9 +55,19 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            # 实测：scp 的 source "dist/*" 在 runner 上保留 dist/ 子目录层，内容落在 /tmp/hikingalone-frontend/dist/；
+            # 少数环境可能平铺。兼容两种情况：有 dist/ 则搬其内容，否则直接搬。
             sudo rm -rf /var/www/hikingalone/*
-            # scp 的 source "dist/*" 直接把内容传到 /tmp/hikingalone-frontend/（无 dist 子目录层）
-            sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
+            sudo mkdir -p /var/www/hikingalone
+            if [ -d /tmp/hikingalone-frontend/dist ]; then
+              sudo mv /tmp/hikingalone-frontend/dist/* /var/www/hikingalone/
+            else
+              sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
+            fi
+            # mv 出来的文件属主是 root，nginx worker 以 www-data 运行，需保证可读，否则静态文件 403
+            sudo chown -R www-data:www-data /var/www/hikingalone
+            sudo chmod -R 755 /var/www/hikingalone
+            ls -la /var/www/hikingalone/
 
       # Nginx 配置随代码版本化：推送 main 时同步到服务器，避免"代码加了 /user、/login，服务器配置还是旧的"
       # scp-action 对单文件 source 会平铺到 target 根（与 dist/* 行为一致），故 cp 路径为 /tmp/hikingalone-nginx/nginx-hikingalone.conf
