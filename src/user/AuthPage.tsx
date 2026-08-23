@@ -12,8 +12,12 @@ import {
 } from '@phosphor-icons/react'
 import { userApi } from './api'
 
-/** 磁吸 CTA：按钮中心向鼠标微幅吸附（与 TrainPage 的 Magnetic 一致） */
-function Magnetic({ children }: { children: React.ReactNode }) {
+/**
+ * 磁吸 CTA：按钮中心向鼠标微幅吸附（与 TrainPage 的 Magnetic 一致）。
+ * className 由调用方传入（默认 inline-block），包裹全宽按钮时必须传 block/w-full，
+ * 否则 inline-block 父容器宽度由内容决定，子元素 w-full 解析失败导致按钮塌缩为内容宽度、文字溢出。
+ */
+function Magnetic({ children, className = 'inline-block' }: { children: React.ReactNode; className?: string }) {
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const sx = useSpring(x, { stiffness: 100, damping: 20 })
@@ -30,7 +34,7 @@ function Magnetic({ children }: { children: React.ReactNode }) {
         x.set(0)
         y.set(0)
       }}
-      className="inline-block"
+      className={className}
     >
       {children}
     </motion.div>
@@ -241,7 +245,8 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-10">
+      {/* overflow-y-auto：卡片超高（注册/改密 4 字段 + 错误提示）时页面可滚动，不被 items-center 裁切 */}
+      <main className="relative z-10 flex-1 flex items-center justify-center overflow-y-auto px-4 py-10">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
             {showForget ? (
@@ -262,19 +267,21 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                     <CheckCircle size={44} weight="light" className="mx-auto text-emerald-500 mb-3" />
                     <p className="text-slate-700 font-medium">密码修改成功</p>
                     <p className="text-sm text-slate-400 mt-1">请使用新密码登录</p>
-                    <button
-                      onClick={() => {
-                        setShowForget(false)
-                        setFpDone(false)
-                        setFpEmail('')
-                        setFpOld('')
-                        setFpNew('')
-                        setFpConfirm('')
-                      }}
-                      className="mt-6 px-5 py-2 bg-slate-900 text-white text-sm rounded-full font-medium hover:bg-slate-800 active:scale-[0.98] transition-all"
-                    >
-                      返回登录
-                    </button>
+                    <Magnetic className="block w-full">
+                      <button
+                        onClick={() => {
+                          setShowForget(false)
+                          setFpDone(false)
+                          setFpEmail('')
+                          setFpOld('')
+                          setFpNew('')
+                          setFpConfirm('')
+                        }}
+                        className="mt-6 w-full py-2.5 bg-slate-900 text-white text-sm rounded-full font-medium hover:bg-slate-800 active:scale-[0.98] transition-all"
+                      >
+                        返回登录
+                      </button>
+                    </Magnetic>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -321,7 +328,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5">{fpError}</p>
                     )}
 
-                    <Magnetic>
+                    <Magnetic className="block w-full">
                       <button
                         onClick={submitForget}
                         disabled={submitting}
@@ -391,7 +398,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       </button>
                     </div>
 
-                    <Magnetic>
+                    <Magnetic className="block w-full">
                       <button
                         onClick={submitLogin}
                         disabled={submitting}
@@ -454,7 +461,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5">{regError}</p>
                     )}
 
-                    <Magnetic>
+                    <Magnetic className="block w-full">
                       <button
                         onClick={submitRegister}
                         disabled={submitting}
