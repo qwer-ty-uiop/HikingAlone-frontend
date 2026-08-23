@@ -13,6 +13,9 @@ import type {
 
 const SUCCESS_CODE = 200
 
+/** 与 App.tsx 的 REDIRECT_KEY 同一 key：登录后回跳目标页（请求层无法 import 组件层，故各自定义、保持字面量一致） */
+const REDIRECT_KEY = 'hikingalone.redirect'
+
 /** 统一请求：校验 Result.code，非 200 抛后端 message，HTTP 失败抛网络错误；no-store 避免 GET 命中缓存导致提交后数据不刷新；
  *  credentials: 'include' 携带 HttpSession Cookie，/train 接口从会话取当前登录用户 */
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -22,8 +25,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     cache: 'no-store',
     ...options,
   })
-  // 401 未登录：会话缺失/过期，跳回登录页
+  // 401 未登录：会话缺失/过期，记下当前页供登录后回跳，再跳登录页
   if (res.status === 401) {
+    if (window.location.pathname !== '/login') {
+      sessionStorage.setItem(REDIRECT_KEY, window.location.pathname)
+    }
     window.location.href = '/login'
     throw new Error('未登录，请先登录')
   }

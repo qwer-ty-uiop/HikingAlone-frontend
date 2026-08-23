@@ -11,6 +11,9 @@ const SUCCESS_CODE = 200
 /** 登录态本地存储键：仅存邮箱标识，密码等敏感信息不落 localStorage */
 const AUTH_EMAIL_KEY = 'hikingalone.email'
 
+/** 登录后回跳目标页存储键：未登录点"进入训练"等被拦时记录，登录成功后跳回 */
+export const REDIRECT_KEY = 'hikingalone.redirect'
+
 function App() {
   const [path, setPath] = useState('/')
   const [email, setEmail] = useState<string | null>(() => localStorage.getItem(AUTH_EMAIL_KEY))
@@ -33,8 +36,10 @@ function App() {
   const handleLogin = useCallback((userEmail: string) => {
     localStorage.setItem(AUTH_EMAIL_KEY, userEmail)
     setEmail(userEmail)
-    // 登录成功后回到首页
-    go('/')
+    // 若有登录前被拦下想去的页面则回跳，否则回首页
+    const redirect = sessionStorage.getItem(REDIRECT_KEY)
+    sessionStorage.removeItem(REDIRECT_KEY)
+    go(redirect || '/')
   }, [go])
 
   const handleLogout = useCallback(() => {
@@ -45,7 +50,12 @@ function App() {
     go('/')
   }, [go])
 
-  // 训练打卡页
+  // 训练打卡页（需登录）
+  if (path === '/train' && !email) {
+    // 未登录直接访问 /train（刷新/输 URL）：把当前历史条目替换为 /login，不残留 /train
+    return <RedirectToLogin setPath={setPath} />
+  }
+
   if (path === '/train') {
     return <TrainPage go={go} />
   }
@@ -76,6 +86,15 @@ function App() {
 
 // ============ 首页 ============
 
+/** 未登录访问受保护页面时：把当前历史条目替换为 /login 并渲染登录页（replaceState 不留 /train 记录） */
+function RedirectToLogin({ setPath }: { setPath: (p: string) => void }) {
+  useEffect(() => {
+    window.history.replaceState(null, '', '/login')
+    setPath('/login')
+  }, [setPath])
+  return null
+}
+
 interface HomePageProps {
   go: (link: string) => void
   email: string | null
@@ -88,6 +107,19 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
   const [error, setError] = useState('')
   const [bannerIndex, setBannerIndex] = useState(0)
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set())
+
+  // 跳转到与用户行为紧密相关的页面（训练打卡等）：未登录先记下目标页再跳登录页，登录成功后回跳
+  const goProtected = useCallback(
+    (link: string) => {
+      if (!email) {
+        sessionStorage.setItem(REDIRECT_KEY, link)
+        go('/login')
+        return
+      }
+      go(link)
+    },
+    [email, go],
+  )
 
   // 拉取首页数据 GET /home
   useEffect(() => {
@@ -278,7 +310,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
                 {error || '探索未知，挑战自我'}
               </p>
               <button
-                onClick={() => go('/train')}
+                onClick={() => goProtected('/train')}
                 className="px-6 py-3 bg-white text-slate-900 rounded-full font-medium hover:bg-emerald-50 transition-all active:scale-[0.98]"
               >
                 进入训练
@@ -302,7 +334,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               制定周期性训练计划，每天提交完成情况，用日历热力图记录每一次坚持。
             </p>
             <button
-              onClick={() => go('/train')}
+              onClick={() => goProtected('/train')}
               className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
             >
               <Barbell size={14} weight="fill" />
