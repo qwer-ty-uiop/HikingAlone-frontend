@@ -1,4 +1,6 @@
 import type {
+  EmailCodeDTO,
+  EmailSendResult,
   UserChangePasswordDTO,
   UserCreateResult,
   UserLoginDTO,
@@ -25,7 +27,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const userApi = {
-  /** POST /user/register 注册，返回邮箱与用户名 */
+  /** POST /email/code 发送邮箱验证码（sent=false 表示 60s 冷却中） */
+  sendCode: (dto: EmailCodeDTO) =>
+    request<EmailSendResult>('/email/code', { method: 'POST', body: JSON.stringify(dto) }),
+
+  /** POST /user/register 注册，返回邮箱与用户名（需先获取并填写邮箱验证码） */
   register: (dto: UserRegisterDTO) =>
     request<UserCreateResult>('/user/register', { method: 'POST', body: JSON.stringify(dto) }),
 

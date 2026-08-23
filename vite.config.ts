@@ -31,6 +31,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // 邮箱验证码：纯 API，无需 bypass
+      '/email': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

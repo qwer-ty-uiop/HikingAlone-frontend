@@ -9,6 +9,7 @@ import {
   Eye,
   EyeSlash,
   CheckCircle,
+  CircleNotch,
 } from '@phosphor-icons/react'
 import { userApi } from './api'
 
@@ -100,6 +101,173 @@ function Field({
   )
 }
 
+/**
+ * 邮箱验证码字段：验证码输入框 + 磁吸发送按钮，覆盖发送中/成功/冷却/失败四种状态：
+ * - 发送中：按钮转圈图标 + 「发送中」，禁点
+ * - 成功：消息行绿色对勾入场，按钮进入 60s 倒计时（下方进度条随剩余秒数线性缩短）
+ * - 冷却（后端 sent=false）：红字提示「发送过于频繁」+ 60s 倒计时防连点（与后端冷却时长对齐）
+ * - 失败：按钮抖动 + 红字提示；重试/重新发送时清除
+ * 邮箱格式问题不在本组件内处理，通过 onEmailInvalid 回调到父级邮箱字段下展示。
+ */
+function VerificationCodeField({
+  email,
+  value,
+  onChange,
+  error,
+  onEmailInvalid,
+}: {
+  email: string
+  value: string
+  onChange: (v: string) => void
+  error?: string
+  onEmailInvalid: (msg: string) => void
+}) {
+  const [sending, setSending] = useState(false)
+  const [sentSuccess, setSentSuccess] = useState(false)
+  const [countdown, setCountdown] = useState(0)
+  const [totalSeconds, setTotalSeconds] = useState(0) // 本次倒计时总长（成功/冷却均为 60s），用于进度条比例
+  const [msg, setMsg] = useState('')
+  const [shakeKey, setShakeKey] = useState(0) // 自增触发按钮失败抖动
+
+  // 倒计时逐秒递减
+  useEffect(() => {
+    if (countdown <= 0) return
+    const timer = setInterval(() => setCountdown((s) => s - 1), 1000)
+    return () => clearInterval(timer)
+  }, [countdown])
+
+  // 倒计时归零：清掉提示与成功态，避免残留误导
+  useEffect(() => {
+    if (countdown === 0 && msg) {
+      setMsg('')
+      setSentSuccess(false)
+    }
+  }, [countdown, msg])
+
+  const send = async () => {
+    if (countdown > 0 || sending) return
+    const em = email.trim()
+    if (!em) {
+      onEmailInvalid('请先输入邮箱')
+      return
+    }
+    if (!EMAIL_RE.test(em)) {
+      onEmailInvalid('邮箱格式不正确')
+      return
+    }
+    onEmailInvalid('')
+    setSending(true)
+    setMsg('')
+    try {
+      const result = await userApi.sendCode({ email: em })
+      if (result.sent) {
+        setSentSuccess(true)
+        setMsg('验证码已发送，请查收邮件')
+        setCountdown(60)
+        setTotalSeconds(60)
+      } else {
+        // 后端处于冷却期：未发送，提示并禁点（与后端 register.code.cool=60s 对齐，避免提前点击又被拒）
+        setMsg('发送过于频繁，请稍后再试')
+        setCountdown(60)
+        setTotalSeconds(60)
+        setShakeKey((k) => k + 1)
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : '验证码发送失败，请稍后重试')
+      setShakeKey((k) => k + 1)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div>
+      <span className="block text-sm font-medium text-slate-700 mb-1.5">邮箱验证码</span>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+            <Lock size={15} weight="bold" />
+          </span>
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="4 位数字"
+            inputMode="numeric"
+            className={`w-full rounded-2xl border bg-white py-2.5 pl-10 pr-3.5 text-sm outline-none transition-all placeholder:text-slate-300 ${
+              error
+                ? 'border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100'
+                : 'border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100'
+            }`}
+          />
+          {/* 倒计时进度条：剩余秒数/总长比例，宽度线性缩短，直观表达等待剩余 */}
+          {countdown > 0 && (
+            <div className="absolute bottom-[5px] left-10 right-3.5 h-[2px] rounded-full bg-slate-100 overflow-hidden">
+              <motion.div
+                className="h-full bg-emerald-500 rounded-full"
+                animate={{ width: `${(countdown / totalSeconds) * 100}%` }}
+                transition={{ duration: 1, ease: 'linear' }}
+              />
+            </div>
+          )}
+        </div>
+        {/* shakeKey 变化 → 重挂载触发失败抖动（keyframes 只在挂载时执行一次） */}
+        <motion.div
+          key={shakeKey}
+          animate={shakeKey > 0 ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+          transition={{ duration: 0.4, ease: 'easeInOut' }}
+        >
+          <Magnetic>
+            <button
+              onClick={send}
+              disabled={sending || countdown > 0}
+              className={`flex items-center justify-center gap-1.5 shrink-0 px-4 py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+                countdown > 0
+                  ? 'bg-slate-100 text-slate-500'
+                  : sending
+                    ? 'bg-emerald-600/80 text-white'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+            >
+              {sending ? (
+                <>
+                  <CircleNotch size={14} weight="bold" className="animate-spin" />
+                  发送中
+                </>
+              ) : countdown > 0 ? (
+                /* key 每秒变化 → 数字切换时轻弹入场，让倒计时有跳动感 */
+                <motion.span
+                  key={countdown}
+                  initial={{ y: -4, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                >
+                  {countdown}s
+                </motion.span>
+              ) : (
+                '获取验证码'
+              )}
+            </button>
+          </Magnetic>
+        </motion.div>
+      </div>
+      <AnimatePresence>
+        {msg && (
+          <motion.p
+            key={msg}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`mt-1 text-xs flex items-center gap-1 ${sentSuccess ? 'text-emerald-600' : 'text-red-500'}`}
+          >
+            {sentSuccess && <CheckCircle size={13} weight="bold" />}
+            {msg}
+          </motion.p>
+        )}
+      </AnimatePresence>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  )
+}
+
 interface AuthPageProps {
   go: (link: string) => void
   onLogin: (email: string) => void
@@ -123,18 +291,22 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
   const [regPassword, setRegPassword] = useState('')
   const [regConfirm, setRegConfirm] = useState('')
   const [regError, setRegError] = useState('')
-  const [regFieldError, setRegFieldError] = useState<{ username?: string; email?: string; password?: string; confirm?: string }>({})
+  const [regFieldError, setRegFieldError] = useState<{ username?: string; email?: string; password?: string; confirm?: string; code?: string }>({})
 
   // 改密
   const [fpEmail, setFpEmail] = useState('')
   const [fpOld, setFpOld] = useState('')
   const [fpNew, setFpNew] = useState('')
   const [fpConfirm, setFpConfirm] = useState('')
+  const [fpCode, setFpCode] = useState('')
   const [fpError, setFpError] = useState('')
-  const [fpFieldError, setFpFieldError] = useState<{ email?: string; oldPassword?: string; newPassword?: string; confirm?: string }>({})
+  const [fpFieldError, setFpFieldError] = useState<{ email?: string; oldPassword?: string; newPassword?: string; confirm?: string; code?: string }>({})
   const [fpDone, setFpDone] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
+
+  // 注册验证码：输入值（发送/倒计时状态由 VerificationCodeField 自持）
+  const [regCode, setRegCode] = useState('')
 
   // 切换登录/注册时清掉上一次的错误提示
   useEffect(() => {
@@ -164,9 +336,9 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
     }
   }
 
-  /** 注册：username/email/password/确认密码，全量校验 + 提交；成功后自动切回登录并预填邮箱 */
+  /** 注册：username/email/password/确认密码/验证码，全量校验 + 提交；成功后自动切回登录并预填邮箱 */
   const submitRegister = async () => {
-    const fe: { username?: string; email?: string; password?: string; confirm?: string } = {}
+    const fe: { username?: string; email?: string; password?: string; confirm?: string; code?: string } = {}
     if (!regUsername.trim()) fe.username = '请输入用户名'
     else if (regUsername.trim().length < 2) fe.username = '用户名至少 2 个字符'
     if (!regEmail.trim()) fe.email = '请输入邮箱'
@@ -175,12 +347,14 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
     else if (regPassword.length < 6) fe.password = '密码至少 6 位'
     if (!regConfirm) fe.confirm = '请再次输入密码'
     else if (regConfirm !== regPassword) fe.confirm = '两次输入的密码不一致'
+    if (!regCode.trim()) fe.code = '请输入验证码'
+    else if (regCode.trim().length !== 4) fe.code = '验证码为 4 位数字'
     setRegFieldError(fe)
     if (Object.keys(fe).length) return
     setSubmitting(true)
     setRegError('')
     try {
-      await userApi.register({ username: regUsername.trim(), email: regEmail.trim(), password: regPassword })
+      await userApi.register({ username: regUsername.trim(), email: regEmail.trim(), password: regPassword, code: regCode.trim() })
       // 注册成功：切回登录并预填邮箱
       setLoginEmail(regEmail.trim())
       setMode('login')
@@ -191,11 +365,13 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
     }
   }
 
-  /** 改密：email/旧密码/新密码/确认，全量校验 + 提交；成功后关闭面板并清空 */
+  /** 改密：email/验证码/旧密码/新密码/确认，全量校验 + 提交；成功后关闭面板并清空 */
   const submitForget = async () => {
-    const fe: { email?: string; oldPassword?: string; newPassword?: string; confirm?: string } = {}
+    const fe: { email?: string; oldPassword?: string; newPassword?: string; confirm?: string; code?: string } = {}
     if (!fpEmail.trim()) fe.email = '请输入邮箱'
     else if (!EMAIL_RE.test(fpEmail.trim())) fe.email = '邮箱格式不正确'
+    if (!fpCode.trim()) fe.code = '请输入验证码'
+    else if (fpCode.trim().length !== 4) fe.code = '验证码为 4 位数字'
     if (!fpOld) fe.oldPassword = '请输入旧密码'
     if (!fpNew) fe.newPassword = '请输入新密码'
     else if (fpNew.length < 6) fe.newPassword = '新密码至少 6 位'
@@ -208,6 +384,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
     try {
       await userApi.changePassword({
         email: fpEmail.trim(),
+        code: fpCode.trim(),
         oldPassword: fpOld,
         newPassword: fpNew,
       })
@@ -260,7 +437,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                 className="rounded-4xl border border-slate-200/50 bg-white p-8 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)]"
               >
                 <h1 className="text-2xl font-bold tracking-tighter text-slate-900">修改密码</h1>
-                <p className="text-sm text-slate-500 mt-1.5 mb-7">验证旧密码后设置新密码</p>
+                <p className="text-sm text-slate-500 mt-1.5 mb-7">验证邮箱归属后设置新密码</p>
 
                 {fpDone ? (
                   <div className="py-8 text-center">
@@ -276,6 +453,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                           setFpOld('')
                           setFpNew('')
                           setFpConfirm('')
+                          setFpCode('')
                         }}
                         className="mt-6 w-full py-2.5 bg-slate-900 text-white text-sm rounded-full font-medium hover:bg-slate-800 active:scale-[0.98] transition-all"
                       >
@@ -294,6 +472,14 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       placeholder="you@example.com"
                       error={fpFieldError.email}
                       autoFocus
+                    />
+                    {/* 验证码：改密同样需要邮箱验证码证明归属（复用注册同款发送交互） */}
+                    <VerificationCodeField
+                      email={fpEmail}
+                      value={fpCode}
+                      onChange={setFpCode}
+                      error={fpFieldError.code}
+                      onEmailInvalid={(msg) => setFpFieldError((p) => ({ ...p, email: msg }))}
                     />
                     <Field
                       label="旧密码"
@@ -436,6 +622,14 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       onChange={setRegEmail}
                       placeholder="you@example.com"
                       error={regFieldError.email}
+                    />
+                    {/* 验证码：输入框 + 磁吸发送按钮（发送中/成功/冷却/失败反馈），60s 倒计时防重复发送 */}
+                    <VerificationCodeField
+                      email={regEmail}
+                      value={regCode}
+                      onChange={setRegCode}
+                      error={regFieldError.code}
+                      onEmailInvalid={(msg) => setRegFieldError((p) => ({ ...p, email: msg }))}
                     />
                     <Field
                       label="密码"
