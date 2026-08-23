@@ -31,6 +31,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      # 必须 checkout：后面 scp deploy/nginx-hikingalone.conf 依赖仓库里的文件（只有 download-artifact 的话该文件在 runner 上不存在）
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: hikingalone-dist
@@ -57,6 +60,7 @@ jobs:
             sudo mv /tmp/hikingalone-frontend/* /var/www/hikingalone/
 
       # Nginx 配置随代码版本化：推送 main 时同步到服务器，避免"代码加了 /user、/login，服务器配置还是旧的"
+      # scp-action 对单文件 source 会平铺到 target 根（与 dist/* 行为一致），故 cp 路径为 /tmp/hikingalone-nginx/nginx-hikingalone.conf
       - name: Upload Nginx config
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -64,7 +68,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "deploy/nginx-hikingalone.conf"
-          target: "/tmp/hikingalone-frontend/"
+          target: "/tmp/hikingalone-nginx/"
 
       - name: Install and reload Nginx
         uses: appleboy/ssh-action@v1.2.0
@@ -73,5 +77,5 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            sudo cp /tmp/hikingalone-frontend/nginx-hikingalone.conf /etc/nginx/conf.d/hikingalone.conf
+            sudo cp /tmp/hikingalone-nginx/nginx-hikingalone.conf /etc/nginx/conf.d/hikingalone.conf
             sudo nginx -t && sudo systemctl reload nginx
