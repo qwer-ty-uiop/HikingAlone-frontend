@@ -42,6 +42,13 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // 天地图瓦片代理：dev 环境把 /tdt/DataServer 转发到天地图，
+      // 线上由 nginx proxy_cache 永久缓存（瓦片不可变，缓存后不再消耗天地图每日配额）
+      '/tdt': {
+        target: 'https://t0.tianditu.gov.cn',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tdt/, ''),
+      },
     },
   },
 })

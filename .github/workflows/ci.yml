@@ -97,6 +97,9 @@ jobs:
             sudo cp /tmp/hikingalone-nginx/nginx-hikingalone.conf /etc/nginx/conf.d/hikingalone.conf
             # 校验关键指令确实写入目标，防止 cp 目标路径不对导致线上仍是旧配置
             grep -q "server_name _" /etc/nginx/conf.d/hikingalone.conf && echo "conf check OK"
+            # 天地图瓦片缓存目录：proxy_cache_path 指向此处，需存在且 www-data 可写
+            sudo mkdir -p /var/cache/nginx/tdt
+            sudo chown -R www-data:www-data /var/cache/nginx/tdt
             sudo nginx -t && sudo systemctl reload nginx
             # 指纹验证：新配置的静态资源规则带 immutable 缓存头
             curl -sI http://127.0.0.1/assets/verify.js | grep -i "cache-control" || echo "WARN: no immutable cache header"

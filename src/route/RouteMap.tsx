@@ -20,20 +20,19 @@ import type { RoutePoint, RouteWaypoint } from './types'
 setWorkerUrl(maplibreWorkerUrl)
 
 /**
- * 天地图（国家地理信息公共服务平台）底图，免费、浏览器端 key、国内访问快。
+ * 天地图（国家地理信息公共服务平台）底图，免费、国内访问快。
  * 坐标系为 CGCS2000，与 GPX 的 WGS-84 坐标在民用精度下重合，无需坐标转换。
  * - img_w 卫星影像（看地形/山脊/实际路径），Web 墨卡托投影（_w 后缀）
  * - cia_w 卫星影像注记叠加层（中文地名、道路名）
- * t0~t7 八个子域并发加载瓦片；l 为层级、x/y 为瓦片号（注意是 l 不是 z）。
- * 浏览器端 key 本就设计为暴露在前端使用。
+ *
+ * 配额保护：天地图每 key 每天 1 万次，单图一次加载就是几十上百片（影像+注记两层）。
+ * 瓦片内容不可变，因此走本站 /tdt 代理（线上 nginx proxy_cache 永久缓存、dev 走 vite proxy），
+ * 首次回源后所有后续请求命中本地缓存，不再消耗天地图配额；同时 maxzoom 限 16（徒步无需 18 级）。
+ * 不再使用 t0~t7 子域轮询——子域会打散缓存 key，缓存代理下单一域名更省配额。
  */
 const TIANDITU_KEY = 'b3ae40b1aa340bdbd0d2b431068396f0'
-function tdtTiles(layer: string): string[] {
-  // MapLibre 无 Leaflet 的 {s} 子域占位符，显式列出 t0~t7，由其轮流并发请求
-  return [0, 1, 2, 3, 4, 5, 6, 7].map(
-    (s) =>
-      `https://t${s}.tianditu.gov.cn/DataServer?T=${layer}&x={x}&y={y}&l={z}&tk=${TIANDITU_KEY}`,
-  )
+function tdtTileUrl(layer: string): string {
+  return `/tdt/DataServer?T=${layer}&x={x}&y={y}&l={z}&tk=${TIANDITU_KEY}`
 }
 
 const TIANDITU_STYLE: StyleSpecification = {
@@ -41,16 +40,16 @@ const TIANDITU_STYLE: StyleSpecification = {
   sources: {
     'tdt-img': {
       type: 'raster',
-      tiles: tdtTiles('img_w'),
+      tiles: [tdtTileUrl('img_w')],
       tileSize: 256,
-      maxzoom: 18,
+      maxzoom: 16,
       attribution: '© 天地图 · 国家地理信息公共服务平台',
     },
     'tdt-cia': {
       type: 'raster',
-      tiles: tdtTiles('cia_w'),
+      tiles: [tdtTileUrl('cia_w')],
       tileSize: 256,
-      maxzoom: 18,
+      maxzoom: 16,
     },
   },
   layers: [
@@ -160,6 +159,8 @@ export default function RouteMap({ points, waypoints = [], className }: RouteMap
       style: TIANDITU_STYLE,
       center: [points[0].lng, points[0].lat],
       zoom: 12,
+      // 徒步轨迹无需天地图 18 级最深瓦片（该层级单屏瓦片最多、最耗配额），限到 16
+      maxZoom: 16,
       attributionControl: false,
     })
     mapRef.current = map
