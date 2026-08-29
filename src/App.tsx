@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MapPin, CaretDown, Barbell, UserCircle, SignOut } from '@phosphor-icons/react'
+import { MapPin, CaretDown, Barbell, MapTrifold, UserCircle, SignOut } from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
+import RoutePage from './route/RoutePage'
 import AuthPage from './user/AuthPage'
 import { userApi } from './user/api'
 import type { HomeBanner, HomeData, NavMenu } from './types'
@@ -17,6 +18,32 @@ export const REDIRECT_KEY = 'hikingalone.redirect'
 function App() {
   const [path, setPath] = useState('/')
   const [email, setEmail] = useState<string | null>(() => localStorage.getItem(AUTH_EMAIL_KEY))
+  // 是否已完成服务端会话校验：页面加载时用 GET /user/me 校准本地登录态，
+  // 避免 localStorage 残留导致"前端以为已登录、后端会话已失效"的闪屏/反复跳转
+  const [sessionChecked, setSessionChecked] = useState(false)
+
+  // 挂载时向服务端确认会话：有效则以返回邮箱为准（同步 localStorage）；失效则清空本地登录态
+  useEffect(() => {
+    let cancelled = false
+    userApi
+      .me()
+      .then((data) => {
+        if (cancelled) return
+        localStorage.setItem(AUTH_EMAIL_KEY, data.email)
+        setEmail(data.email)
+      })
+      .catch(() => {
+        if (cancelled) return
+        localStorage.removeItem(AUTH_EMAIL_KEY)
+        setEmail(null)
+      })
+      .finally(() => {
+        if (!cancelled) setSessionChecked(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // 监听浏览器历史变化
   useEffect(() => {
@@ -50,14 +77,17 @@ function App() {
     go('/')
   }, [go])
 
-  // 训练打卡页（需登录）
-  if (path === '/train' && !email) {
-    // 未登录直接访问 /train（刷新/输 URL）：把当前历史条目替换为 /login，不残留 /train
-    return <RedirectToLogin setPath={setPath} />
-  }
-
-  if (path === '/train') {
-    return <TrainPage go={go} />
+  // 需登录页面：先看本地登录态，再看服务端会话校验是否完成——
+  // 两层都过才渲染页面，避免"先渲染页面、数据请求 401 后再被踢回登录"的闪屏
+  if (path === '/train' || path === '/routes') {
+    if (!email) {
+      // 未登录直接访问 /train|/routes（刷新/输 URL）：把当前历史条目替换为 /login，不残留原路径
+      return <RedirectToLogin setPath={setPath} />
+    }
+    if (!sessionChecked) {
+      return <SessionChecking />
+    }
+    return path === '/train' ? <TrainPage go={go} /> : <RoutePage go={go} />
   }
 
   if (path === '/login') {
@@ -93,6 +123,18 @@ function RedirectToLogin({ setPath }: { setPath: (p: string) => void }) {
     setPath('/login')
   }, [setPath])
   return null
+}
+
+/** 会话校验中占位：受保护页面在确认服务端会话前的加载态，避免"先渲染页面再被 401 踢回登录"的闪屏 */
+function SessionChecking() {
+  return (
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
+        <p className="mt-4 text-sm text-slate-400">正在确认登录状态…</p>
+      </div>
+    </div>
+  )
 }
 
 interface HomePageProps {
@@ -339,6 +381,26 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
             >
               <Barbell size={14} weight="fill" />
               进入训练
+            </button>
+          </div>
+        </section>
+
+        {/* 路线轨迹入口 */}
+        <section className="mt-10">
+          <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
+            <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
+              <MapTrifold size={22} weight="fill" className="text-emerald-600" />
+              路线轨迹
+            </h2>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">
+              上传徒步轨迹文件（GPX / KML），自动统计里程、时长与累计爬升，在地图上回放每一步。
+            </p>
+            <button
+              onClick={() => goProtected('/routes')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
+            >
+              <MapTrifold size={14} weight="fill" />
+              进入路线
             </button>
           </div>
         </section>

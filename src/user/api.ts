@@ -45,4 +45,7 @@ export const userApi = {
 
   /** POST /user/logout 登出，使服务端会话失效 */
   logout: () => request<null>('/user/logout', { method: 'POST' }),
+
+  /** GET /user/me 当前登录用户（会话校验）：未登录后端返回 401，页面加载时用它校准本地登录态 */
+  me: () => request<UserLoginResult>('/user/me'),
 }
