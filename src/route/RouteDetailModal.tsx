@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { X, TrashSimple, CheckCircle, Clock, Path, TrendUp, MapPin, ArrowsOut, BookOpen } from '@phosphor-icons/react'
+import { X, TrashSimple, CheckCircle, Clock, Path, TrendUp, MapPin, ArrowsOut, BookOpen, Fire } from '@phosphor-icons/react'
 import { routeApi } from './api'
+import { journalApi } from '../journal/api'
 import RouteMap from './RouteMap'
 import { formatDuration } from './RouteUploadModal'
 import type { RouteTrackDetail } from './types'
@@ -22,13 +23,23 @@ export default function RouteDetailModal({ routeId, onClose, onDeleted, onWriteJ
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
+  // 这条线的足迹：被哪些日记引用过（跨模块联动，前端按 routeId 过滤）
+  const [journeys, setJourneys] = useState<{ id: number; title: string; hikeDate: string; distanceKm: number | null }[]>([])
 
   const load = useCallback(() => {
     setLoading(true)
     setError('')
-    routeApi
-      .get(routeId)
-      .then(setDetail)
+    Promise.all([
+      routeApi.get(routeId),
+      journalApi
+        .list(100)
+        .then((items) => items.filter((j) => j.routeId === routeId))
+        .catch(() => []),
+    ])
+      .then(([d, js]) => {
+        setDetail(d)
+        setJourneys(js)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [routeId])
@@ -151,6 +162,34 @@ export default function RouteDetailModal({ routeId, onClose, onDeleted, onWriteJ
                     <span className="text-xs font-sans text-slate-400 ml-0.5">m</span>
                   </div>
                 </div>
+              </div>
+
+              {/* 这条线的足迹：关联日记列表（跨模块联动） */}
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Fire size={13} weight="fill" className="text-orange-500" />
+                  <span className="text-xs font-semibold text-slate-600">这条线的足迹</span>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {journeys.length > 0 ? `走过 ${journeys.length} 次` : '还没有走过的记录'}
+                  </span>
+                </div>
+                {journeys.length > 0 ? (
+                  <div className="divide-y divide-slate-100/80">
+                    {journeys.map((j) => (
+                      <div key={j.id} className="flex items-center gap-3 py-1.5">
+                        <span className="font-mono text-[11px] text-slate-400 w-12 shrink-0">
+                          {j.hikeDate.slice(5).replace('-', '.')}
+                        </span>
+                        <span className="flex-1 text-xs text-slate-600 truncate">{j.title}</span>
+                        {j.distanceKm != null && (
+                          <span className="font-mono text-[10px] text-slate-400">{j.distanceKm.toFixed(1)}km</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">走完这条线，点下方「写日记」把足迹补上</p>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-1">

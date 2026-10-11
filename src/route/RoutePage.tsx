@@ -98,6 +98,8 @@ export default function RoutePage({ go }: RoutePageProps) {
 
   const totalDistance = routes.reduce((s, r) => s + (r.distance || 0), 0)
   const totalDuration = routes.reduce((s, r) => s + (r.durationMin || 0), 0)
+  // 走过次数徽章：hot 聚合结果并入列表卡片
+  const hikeCountByRoute = new Map(hotRoutes.map((h) => [h.routeId, h.hikeCount]))
 
   /** 详情弹窗「写日记」：关闭详情，打开预填了路线与建议标题的日记表单 */
   const handleWriteJournal = (detail: RouteTrackDetail) => {
@@ -304,9 +306,17 @@ export default function RoutePage({ go }: RoutePageProps) {
                         <h3 className="text-base font-bold tracking-tight text-slate-900 truncate">
                           {route.name}
                         </h3>
-                        <span className="text-[11px] text-slate-400 shrink-0">
-                          {route.createTime.slice(0, 10)}
-                        </span>
+                        <div className="shrink-0 flex items-center gap-2">
+                          {(hikeCountByRoute.get(route.id) ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-mono text-orange-600 bg-orange-100/70 px-2 py-0.5 rounded-full">
+                              <Fire size={10} weight="fill" />
+                              走过 {hikeCountByRoute.get(route.id)} 次
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-400">
+                            {route.createTime.slice(0, 10)}
+                          </span>
+                        </div>
                       </div>
                       {route.description && (
                         <p className="text-xs text-slate-400 mb-4 line-clamp-1">{route.description}</p>

@@ -1,6 +1,8 @@
 import { request } from '../api/request'
 import type {
   ChecklistItemAddDTO,
+  GearSuggest,
+  GearSuggestDTO,
   ChecklistItemUpdateDTO,
   GearChecklist,
   GearChecklistSaveDTO,
@@ -64,4 +66,10 @@ export const gearChecklistApi = {
       method: 'POST',
       body: JSON.stringify({ id }),
     }),
+}
+
+export const gearSuggestApi = {
+  /** POST /gear/suggest AI 装备建议（LLM 优先，未配置 key 自动降级内置规则，source 区分） */
+  suggest: (dto: GearSuggestDTO) =>
+    request<GearSuggest>('/gear/suggest', { method: 'POST', body: JSON.stringify(dto) }),
 }

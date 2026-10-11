@@ -78,3 +78,29 @@ export interface ChecklistItemUpdateDTO {
   name?: string
   weightGrams?: number
 }
+
+/** AI 装备建议（POST /gear/suggest）：source=LLM 个性化建议 / RULE 内置规则兜底 */
+export interface GearSuggestItem {
+  name: string
+  /** 品类 1~11 */
+  category: number
+  weightGrams: number | null
+  /** 1 必带 / 2 建议 / 3 可选 */
+  priority: number
+  reason: string
+}
+
+export interface GearSuggest {
+  source: 'LLM' | 'RULE'
+  model: string
+  items: GearSuggestItem[]
+  packingTips: string[]
+}
+
+export interface GearSuggestDTO {
+  routeId?: number
+  days?: number
+  distanceKm?: number
+  month?: number
+  extra?: string
+}
