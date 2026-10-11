@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MapPin, CaretDown, Barbell, MapTrifold, UserCircle, SignOut } from '@phosphor-icons/react'
+import { MapPin, CaretDown, Barbell, MapTrifold, UserCircle, SignOut, Heartbeat } from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
 import RoutePage from './route/RoutePage'
+import BodyPage from './body/BodyPage'
 import AuthPage from './user/AuthPage'
 import { userApi } from './user/api'
 import type { HomeBanner, HomeData, NavMenu } from './types'
@@ -79,15 +80,17 @@ function App() {
 
   // 需登录页面：先看本地登录态，再看服务端会话校验是否完成——
   // 两层都过才渲染页面，避免"先渲染页面、数据请求 401 后再被踢回登录"的闪屏
-  if (path === '/train' || path === '/routes') {
+  if (path === '/train' || path === '/routes' || path === '/body') {
     if (!email) {
-      // 未登录直接访问 /train|/routes（刷新/输 URL）：把当前历史条目替换为 /login，不残留原路径
+      // 未登录直接访问受保护页（刷新/输 URL）：把当前历史条目替换为 /login，不残留原路径
       return <RedirectToLogin setPath={setPath} />
     }
     if (!sessionChecked) {
       return <SessionChecking />
     }
-    return path === '/train' ? <TrainPage go={go} /> : <RoutePage go={go} />
+    if (path === '/train') return <TrainPage go={go} />
+    if (path === '/routes') return <RoutePage go={go} />
+    return <BodyPage go={go} />
   }
 
   if (path === '/login') {
@@ -401,6 +404,26 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
             >
               <MapTrifold size={14} weight="fill" />
               进入路线
+            </button>
+          </div>
+        </section>
+
+        {/* 身体数据入口 */}
+        <section className="mt-10">
+          <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
+            <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
+              <Heartbeat size={22} weight="fill" className="text-emerald-600" />
+              身体数据
+            </h2>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">
+              每天一分钟，记录体重与晨起静息心率。训练是输入，徒步是输出，身体的长期趋势是最好的效果验证。
+            </p>
+            <button
+              onClick={() => goProtected('/body')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
+            >
+              <Heartbeat size={14} weight="fill" />
+              进入记录
             </button>
           </div>
         </section>

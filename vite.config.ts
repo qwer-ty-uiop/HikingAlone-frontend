@@ -32,6 +32,13 @@ export default defineConfig({
         bypass: (req) =>
           req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
       },
+      // 身体数据：/body 既是前端页面路由也是 API 前缀，与 /train 同款 bypass
+      '/body': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
       // 用户模块：纯 API，无前端路由，无需 bypass（/user 页面不存在，浏览器刷新只会 404 到 index.html，属预期）
       '/user': {
         target: 'http://localhost:8080',
