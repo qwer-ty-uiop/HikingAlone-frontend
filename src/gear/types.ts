@@ -104,3 +104,12 @@ export interface GearSuggestDTO {
   month?: number
   extra?: string
 }
+
+/** 常用装备目录条目（GET /gear/catalog 联想数据，平台级共享只读） */
+export interface GearCatalogItem {
+  id: number
+  name: string
+  /** 品类 1~11 */
+  category: number
+  weightGrams: number | null
+}

@@ -11,6 +11,7 @@ import {
 } from '@phosphor-icons/react'
 import { gearChecklistApi, gearItemApi } from './api'
 import GearItemFormModal, { CATEGORY_LABELS } from './GearItemFormModal'
+import GearIcon from '../components/GearIcon'
 import ChecklistDetailModal from './ChecklistDetailModal'
 import { CountUp, Magnetic, MotionList, MotionItem, dateDot } from '../components/ui'
 import type { GearChecklist, GearItem } from './types'
@@ -238,8 +239,9 @@ export default function GearPage({ go }: GearPageProps) {
                             : 'border-slate-100 bg-slate-50/60 opacity-60'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-medium text-slate-900 leading-snug">{item.name}</span>
+                        <div className="flex items-start gap-2.5">
+                          <GearIcon category={item.category} size={16} />
+                          <span className="flex-1 text-sm font-medium text-slate-900 leading-snug">{item.name}</span>
                           {item.status === 0 && (
                             <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500">
                               退役

@@ -1,6 +1,7 @@
 import { request } from '../api/request'
 import type {
   ChecklistItemAddDTO,
+  GearCatalogItem,
   GearSuggest,
   GearSuggestDTO,
   ChecklistItemUpdateDTO,
@@ -15,6 +16,15 @@ import type {
 export const gearItemApi = {
   /** GET /gear/items 全量装备（在役在前） */
   list: () => request<GearItem[]>('/gear/items'),
+
+  /** GET /gear/catalog 常用装备目录联想（平台级共享数据；keyword 可空浏览，limit 缺省 10、钳制 1~20） */
+  catalog: (keyword?: string, limit?: number) => {
+    const params = new URLSearchParams()
+    if (keyword?.trim()) params.set('keyword', keyword.trim())
+    if (limit != null) params.set('limit', String(limit))
+    const qs = params.toString()
+    return request<GearCatalogItem[]>(`/gear/catalog${qs ? `?${qs}` : ''}`)
+  },
 
   /** POST /gear/items 新建装备（默认在役） */
   create: (dto: GearItemSaveDTO) =>

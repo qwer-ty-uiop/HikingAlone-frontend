@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { WarningCircle, Trash } from '@phosphor-icons/react'
 import { gearItemApi } from './api'
-import type { GearItem, GearItemSaveDTO } from './types'
+import GearIcon from '../components/GearIcon'
+import type { GearCatalogItem, GearItem, GearItemSaveDTO } from './types'
 
 /** 与后端 GearCategoryEnum 一致 */
 export const CATEGORY_LABELS = [
@@ -41,9 +42,16 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // 常用装备目录联想：输入名称匹配平台目录，点选自动补齐品类与克重
+  const [catalog, setCatalog] = useState<GearCatalogItem[]>([])
+  const [showSuggest, setShowSuggest] = useState(false)
 
   useEffect(() => {
     if (!open) return
+    gearItemApi
+      .catalog()
+      .then(setCatalog)
+      .catch(() => setCatalog([]))
     if (initial) {
       setName(initial.name)
       setCategory(initial.category)
@@ -62,6 +70,22 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
     setError('')
     setConfirmDelete(false)
   }, [open, initial])
+
+  /** 目录联想：名称非空时本地过滤（目录一次全量拉取，量级小） */
+  const suggestions =
+    name.trim().length >= 1
+      ? catalog
+          .filter((c) => c.name.includes(name.trim()) && c.name !== name.trim())
+          .slice(0, 6)
+      : []
+
+  /** 点选联想项：自动补齐品类与克重，仅空值字段也回填（用户已填的克重不覆盖） */
+  const pickCatalog = (c: GearCatalogItem) => {
+    setName(c.name)
+    setCategory(c.category)
+    if (c.weightGrams != null) setWeight(String(c.weightGrams))
+    setShowSuggest(false)
+  }
 
   const validate = (): string => {
     if (!name.trim()) return '请填写装备名'
@@ -140,15 +164,40 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
               <h3 className="text-lg font-bold text-slate-900">{initial ? '编辑装备' : '新增装备'}</h3>
             </div>
             <div className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
-              <div>
-                <label className={labelCls}>装备名</label>
+              <div className="relative">
+                <label className={labelCls}>装备名（输入可联想常用装备）</label>
                 <input
                   className={inputCls}
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="如：三峰 出云 40L"
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setShowSuggest(true)
+                  }}
+                  onFocus={() => setShowSuggest(true)}
+                  onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+                  placeholder="如：冲锋衣、头灯、双人帐篷…"
                   maxLength={100}
+                  autoComplete="off"
                 />
+                {showSuggest && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                    {suggestions.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => pickCatalog(c)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-emerald-50 transition-colors text-left"
+                      >
+                        <GearIcon category={c.category} size={15} />
+                        <span className="flex-1 text-sm text-slate-700 truncate">{c.name}</span>
+                        {c.weightGrams != null && (
+                          <span className="font-mono text-[11px] text-slate-400">{c.weightGrams}g</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className={labelCls}>品类</label>

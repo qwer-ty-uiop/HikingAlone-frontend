@@ -11,10 +11,12 @@ import {
   Sparkle,
   MagnifyingGlass,
   HandGrabbing,
+  ListChecks,
 } from '@phosphor-icons/react'
-import { gearChecklistApi, gearSuggestApi } from './api'
+import { gearChecklistApi, gearItemApi, gearSuggestApi } from './api'
 import { CATEGORY_LABELS } from './GearItemFormModal'
-import type { GearChecklist, GearItem, GearSuggest, GearSuggestItem } from './types'
+import GearIcon from '../components/GearIcon'
+import type { GearCatalogItem, GearChecklist, GearItem, GearSuggest, GearSuggestItem } from './types'
 
 const inputCls =
   'w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-emerald-400 focus:bg-white transition-colors'
@@ -25,14 +27,19 @@ const STATUS_META: Record<number, { label: string; cls: string }> = {
   2: { label: '已结束', cls: 'bg-slate-100 text-slate-500' },
 }
 
-/** 品类 → 背包装载位置（借鉴主流重装徒步装包原则；顺序即装载顺序） */
+/** 品类 → 背包装载位置（顺序即装载顺序；与 docs/interfaces/gear.md 装包口径一致） */
 const PACKING_SLOTS: { label: string; tip: string; categories: number[] }[] = [
   { label: '随身（不进包）', tip: '鞋在脚上、地图在手', categories: [4, 8] },
-  { label: '顶袋（随手可取）', tip: '急救和头灯必须伸手可及，夜幕/受伤即刻能用', categories: [7, 9] },
-  { label: '背部中段（最重贴背）', tip: '最重的装备贴近背部中上部，行走重心最稳', categories: [1, 10] },
+  { label: '顶袋（随手可取）', tip: '急救和头灯必须伸手可及', categories: [7, 9] },
+  { label: '背部中段（最重贴背）', tip: '最重的装备贴近背部中上部，重心最稳', categories: [1, 10] },
   { label: '包内上部（路上偶取）', tip: '加层衣物随天气取用', categories: [5, 11] },
   { label: '包底（到营才取）', tip: '睡袋帐篷最占空间且到营才用，压包底', categories: [2, 3, 6] },
 ]
+
+/** 品类 → 所属仓位下标（可视化装包显示归位用） */
+function slotIndexOf(category: number): number {
+  return PACKING_SLOTS.findIndex((s) => s.categories.includes(category))
+}
 
 const PRIORITY_META: Record<number, { label: string; cls: string }> = {
   1: { label: '必带', cls: 'bg-red-50 text-red-600' },
@@ -48,11 +55,12 @@ interface ChecklistDetailModalProps {
 }
 
 /**
- * 打包清单详情弹窗（两栏）：
- * 左 = 清单（按装包位置分组渲染，勾选/删除）；右 = 装备库（拖拽装包 + 点击添加 + 手动临时条目）；
- * 顶部 AI 装备建议：行程参数 → LLM 个性化建议（未配置 key 自动降级内置规则）→ 一键入清单
+ * 打包清单详情弹窗：
+ * 列表视图（两栏：清单 + 装备库拖拽/联想）与 装包拼图视图（背包轮廓 + 仓位芯片，拖进背包 = 打包）切换；
+ * AI 装备建议面板跨视图共用；临时条目输入带常用装备目录联想
  */
 export default function ChecklistDetailModal({ checklist, gearItems, onClose, onChanged }: ChecklistDetailModalProps) {
+  const [view, setView] = useState<'list' | 'pack'>('list')
   const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
   const [newWeight, setNewWeight] = useState('')
@@ -60,6 +68,8 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
   const [gearSearch, setGearSearch] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [addingId, setAddingId] = useState<number | null>(null)
+  // 装包拼图视图：正在拖拽的条目（推荐仓位高亮）
+  const [dragItem, setDragItem] = useState<{ id: number; category: number } | null>(null)
 
   // AI 装备建议
   const [aiOpen, setAiOpen] = useState(false)
@@ -71,6 +81,10 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
   const [aiResult, setAiResult] = useState<GearSuggest | null>(null)
   const [addedNames, setAddedNames] = useState<Set<string>>(new Set())
 
+  // 常用装备目录联想（临时条目输入）
+  const [catalog, setCatalog] = useState<GearCatalogItem[]>([])
+  const [showCatalog, setShowCatalog] = useState(false)
+
   useEffect(() => {
     setError('')
     setNewName('')
@@ -80,6 +94,11 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     setAiResult(null)
     setAddedNames(new Set())
     setGearSearch('')
+    setView('list')
+    gearItemApi
+      .catalog()
+      .then(setCatalog)
+      .catch(() => setCatalog([]))
   }, [checklist?.id])
 
   if (!checklist) return null
@@ -92,18 +111,43 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
   const totalWeight = checklist.items.reduce((sum, i) => sum + (i.weightGrams ?? 0), 0)
   const existingNames = new Set(checklist.items.map((i) => i.name))
 
-  /** 按装包位置分组渲染（未匹配的品类归入「包内上部」） */
+  /** 装包视图数据：已打包按品类归位到仓位；未打包进待装栏 */
+  const packedBySlot = PACKING_SLOTS.map((slot) => ({
+    ...slot,
+    items: checklist.items.filter(
+      (i) =>
+        i.checked === 1 &&
+        slot.categories.includes(
+          gearItems.find((g) => g.id === i.gearItemId)?.category ?? 11,
+        ),
+    ),
+  }))
+  const unpacked = checklist.items.filter((i) => i.checked !== 1)
+
+  /** 按装包位置分组的列表视图分组 */
   const slotGroups = PACKING_SLOTS.map((slot) => ({
     ...slot,
-    items: checklist.items.filter((i) => {
-      const cat = gearItems.find((g) => g.id === i.gearItemId)?.category
-      // 临时条目/装备已删除：按名称匹配不到品类，归入包内上部
-      return slot.categories.includes(cat ?? 0)
-    }),
+    items: checklist.items.filter((i) =>
+      slot.categories.includes(gearItems.find((g) => g.id === i.gearItemId)?.category ?? 11),
+    ),
   })).filter((s) => s.items.length > 0)
   const uncategorized = checklist.items.filter(
     (i) => !slotGroups.some((s) => s.items.includes(i)),
   )
+
+  /** 临时条目的目录联想 */
+  const catalogSuggestions =
+    newName.trim().length >= 1
+      ? catalog
+          .filter((c) => c.name.includes(newName.trim()) && c.name !== newName.trim())
+          .slice(0, 5)
+      : []
+
+  const pickCatalog = (c: GearCatalogItem) => {
+    setNewName(c.name)
+    if (c.weightGrams != null) setNewWeight(String(c.weightGrams))
+    setShowCatalog(false)
+  }
 
   const toggleItem = async (id: number, checked: number) => {
     try {
@@ -123,7 +167,6 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     }
   }
 
-  /** 从装备库加条目（点击或拖拽落下），已存在的自动跳过 */
   const addGear = async (g: GearItem) => {
     if (existingNames.has(g.name)) {
       setError(`「${g.name}」已经在清单里了`)
@@ -154,7 +197,6 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     if (g) addGear(g)
   }
 
-  /** 手动添加临时条目 */
   const handleAddManual = async () => {
     if (!newName.trim()) {
       setError('请填写条目名')
@@ -175,7 +217,6 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     }
   }
 
-  /** AI 装备建议：行程参数 → LLM（未配置 key 自动降级规则引擎） */
   const handleSuggest = async () => {
     setAiLoading(true)
     setError('')
@@ -196,7 +237,6 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     }
   }
 
-  /** 把建议条目加入清单（全部或单条），已加入的跳过 */
   const addSuggested = async (items: GearSuggestItem[]) => {
     const toAdd = items.filter((s) => !existingNames.has(s.name) && !addedNames.has(s.name))
     if (toAdd.length === 0) {
@@ -258,34 +298,68 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     }
   }
 
-  /** 渲染清单条目行（勾选/名称/克重/删除） */
-  const renderItemRow = (item: GearChecklist['items'][number]) => (
-    <div key={item.id} className="flex items-center gap-3 py-2">
-      <button
-        onClick={() => toggleItem(item.id, item.checked)}
-        className={`shrink-0 transition-colors ${item.checked === 1 ? 'text-emerald-600' : 'text-slate-200 hover:text-slate-400'}`}
-        aria-label={item.checked === 1 ? '取消打包' : '标记已打包'}
-      >
-        {item.checked === 1 ? <CheckCircle size={18} weight="fill" /> : <Circle size={18} weight="regular" />}
-      </button>
-      <span className={`flex-1 text-sm ${item.checked === 1 ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
-        {item.name}
-        {item.gearItemId == null && <span className="ml-1.5 text-[10px] text-slate-300">临时</span>}
-      </span>
-      {item.weightGrams != null && (
-        <span className="font-mono text-xs text-slate-400">
-          {item.weightGrams >= 1000 ? `${(item.weightGrams / 1000).toFixed(1)}kg` : `${item.weightGrams}g`}
+  const renderItemRow = (item: GearChecklist['items'][number]) => {
+    const category = gearItems.find((g) => g.id === item.gearItemId)?.category ?? null
+    return (
+      <div key={item.id} className="flex items-center gap-3 py-2">
+        <button
+          onClick={() => toggleItem(item.id, item.checked)}
+          className={`shrink-0 transition-colors ${item.checked === 1 ? 'text-emerald-600' : 'text-slate-200 hover:text-slate-400'}`}
+          aria-label={item.checked === 1 ? '取消打包' : '标记已打包'}
+        >
+          {item.checked === 1 ? <CheckCircle size={18} weight="fill" /> : <Circle size={18} weight="regular" />}
+        </button>
+        <GearIcon category={category} size={15} />
+        <span className={`flex-1 text-sm ${item.checked === 1 ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
+          {item.name}
+          {item.gearItemId == null && <span className="ml-1.5 text-[10px] text-slate-300">临时</span>}
         </span>
-      )}
-      <button
-        onClick={() => removeItem(item.id)}
-        className="p-1.5 rounded-full text-slate-200 hover:text-red-500 hover:bg-red-50 transition-colors"
-        aria-label="删除条目"
+        {item.weightGrams != null && (
+          <span className="font-mono text-xs text-slate-400">
+            {item.weightGrams >= 1000 ? `${(item.weightGrams / 1000).toFixed(1)}kg` : `${item.weightGrams}g`}
+          </span>
+        )}
+        <button
+          onClick={() => removeItem(item.id)}
+          className="p-1.5 rounded-full text-slate-200 hover:text-red-500 hover:bg-red-50 transition-colors"
+          aria-label="删除条目"
+        >
+          <Trash size={12} />
+        </button>
+      </div>
+    )
+  }
+
+  /** 装包芯片（可拖拽）：拖出背包 = 未打包 */
+  const renderPackChip = (item: GearChecklist['items'][number], compact = true) => {
+    const category = gearItems.find((g) => g.id === item.gearItemId)?.category ?? null
+    return (
+      <div
+        key={item.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/item-id', String(item.id))
+          e.dataTransfer.setData('text/item-checked', String(item.checked))
+          setDragItem({ id: item.id, category: category ?? 11 })
+        }}
+        onDragEnd={() => setDragItem(null)}
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 cursor-grab active:cursor-grabbing transition-all ${
+          item.checked === 1
+            ? 'border-emerald-200 bg-white shadow-sm hover:border-red-200'
+            : 'border-slate-200 bg-white hover:border-emerald-300'
+        }`}
+        title={item.name}
       >
-        <Trash size={12} />
-      </button>
-    </div>
-  )
+        <GearIcon category={category} size={compact ? 12 : 14} />
+        <span className="text-[11px] text-slate-700 max-w-[72px] truncate">{item.name}</span>
+        {item.weightGrams != null && (
+          <span className="font-mono text-[9px] text-slate-300">
+            {item.weightGrams >= 1000 ? `${(item.weightGrams / 1000).toFixed(1)}k` : `${item.weightGrams}g`}
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <motion.div
@@ -296,7 +370,7 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
       onClick={onClose}
     >
       <motion.div
-        className="w-full max-w-3xl bg-white rounded-4xl shadow-2xl max-h-[94dvh] flex flex-col overflow-hidden"
+        className="w-full max-w-3xl bg-white rounded-4xl shadow-2xl max-h-[94dvh] flex flex-col overflow-hidden relative"
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 100, damping: 20 } }}
         exit={{ opacity: 0, scale: 0.96, y: 10, transition: { duration: 0.15 } }}
@@ -429,18 +503,16 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                             {PRIORITY_META[s.priority].label}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-slate-800">
+                            <div className="text-sm text-slate-800 flex items-center gap-1.5">
+                              <GearIcon category={s.category} size={13} />
                               {s.name}
                               {s.weightGrams != null && (
-                                <span className="ml-1.5 font-mono text-[10px] text-slate-400">
+                                <span className="font-mono text-[10px] text-slate-400">
                                   {s.weightGrams >= 1000
                                     ? `${(s.weightGrams / 1000).toFixed(1)}kg`
                                     : `${s.weightGrams}g`}
                                 </span>
                               )}
-                              <span className="ml-1.5 text-[10px] text-slate-300">
-                                {CATEGORY_LABELS[s.category - 1]}
-                              </span>
                             </div>
                             {s.reason && <p className="text-[11px] text-slate-400 leading-snug">{s.reason}</p>}
                           </div>
@@ -474,128 +546,296 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
           )}
         </div>
 
-        {/* 两栏主体 */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-5 gap-0">
-          {/* 左：清单（拖拽落区 + 装包位置分组） */}
-          <div
-            className={`md:col-span-3 overflow-y-auto px-7 py-4 border-r border-slate-100 transition-colors ${
-              dragOver ? 'bg-emerald-50/50' : ''
-            }`}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDragOver(true)
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-          >
-            <p className="text-[11px] text-slate-300 mb-3 flex items-center gap-1">
-              <HandGrabbing size={12} />
-              从右侧装备库拖进来，或点击添加
-            </p>
-            {checklist.items.length === 0 && (
-              <p className="py-10 text-center text-sm text-slate-300">
-                清单还是空的 —— 试试 AI 建议、拖拽装备，或手动添加
-              </p>
-            )}
-            {slotGroups.map((slot) => (
-              <div key={slot.label} className="mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[11px] font-semibold text-slate-500">{slot.label}</span>
-                </div>
-                <p className="text-[10px] text-slate-300 mb-1.5">{slot.tip}</p>
-                <div className="divide-y divide-slate-50">{slot.items.map(renderItemRow)}</div>
-              </div>
+        {/* 视图切换 */}
+        <div className="px-7 pt-3 pb-1 flex items-center justify-between">
+          <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+            {(
+              [
+                { key: 'list', label: '列表', icon: <ListChecks size={12} /> },
+                { key: 'pack', label: '装包拼图', icon: <HandGrabbing size={12} /> },
+              ] as { key: 'list' | 'pack'; label: string; icon: React.ReactNode }[]
+            ).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                className={`relative px-3 py-1.5 text-xs rounded-full transition-colors flex items-center gap-1 ${
+                  view === t.key ? 'text-slate-900 font-medium' : 'text-slate-400'
+                }`}
+              >
+                {view === t.key && (
+                  <motion.span
+                    layoutId="checklist-view-pill"
+                    className="absolute inset-0 bg-white rounded-full shadow-sm"
+                    transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1">
+                  {t.icon}
+                  {t.label}
+                </span>
+              </button>
             ))}
-            {uncategorized.length > 0 && (
-              <div className="divide-y divide-slate-50">{uncategorized.map(renderItemRow)}</div>
-            )}
-            {checklist.items.length > 0 && uncategorized.length === 0 && slotGroups.length === 0 && null}
           </div>
+          {view === 'pack' && (
+            <span className="text-[11px] text-slate-300">
+              拖进背包 = 打包装入 · 拖回待装 = 取出 · 虚线仓位是它的推荐位置
+            </span>
+          )}
+        </div>
 
-          {/* 右：装备库（拖拽源 + 点击添加） */}
-          <div className="md:col-span-2 overflow-y-auto px-5 py-4 bg-slate-50/40">
-            <div className="relative mb-3">
-              <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
-              <input
-                className="w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs outline-none focus:border-emerald-400"
-                value={gearSearch}
-                onChange={(e) => setGearSearch(e.target.value)}
-                placeholder="搜索我的装备"
-              />
+        {/* 主体 */}
+        {view === 'list' ? (
+          <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-5 gap-0">
+            {/* 左：清单（装包位置分组） */}
+            <div
+              className={`md:col-span-3 overflow-y-auto px-7 py-4 border-r border-slate-100 transition-colors ${
+                dragOver ? 'bg-emerald-50/50' : ''
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              <p className="text-[11px] text-slate-300 mb-3 flex items-center gap-1">
+                <HandGrabbing size={12} />
+                从右侧装备库拖进来，或点击添加
+              </p>
+              {checklist.items.length === 0 && (
+                <p className="py-10 text-center text-sm text-slate-300">
+                  清单还是空的 —— 试试 AI 建议、拖拽装备，或手动添加
+                </p>
+              )}
+              {slotGroups.map((slot) => (
+                <div key={slot.label} className="mb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[11px] font-semibold text-slate-500">{slot.label}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 mb-1.5">{slot.tip}</p>
+                  <div className="divide-y divide-slate-50">{slot.items.map(renderItemRow)}</div>
+                </div>
+              ))}
+              {uncategorized.length > 0 && (
+                <div className="divide-y divide-slate-50">{uncategorized.map(renderItemRow)}</div>
+              )}
             </div>
-            {matchedGear.length === 0 && (
-              <p className="py-8 text-center text-xs text-slate-300">装备库（在役）里没有匹配的装备</p>
-            )}
-            <div className="space-y-1.5">
-              {matchedGear.map((g) => {
-                const added = existingNames.has(g.name)
-                return (
-                  <div
-                    key={g.id}
-                    draggable={!added}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/gear-id', String(g.id))
-                      e.dataTransfer.effectAllowed = 'copy'
+
+            {/* 右：装备库 */}
+            <div className="md:col-span-2 overflow-y-auto px-5 py-4 bg-slate-50/40">
+              <div className="relative mb-3">
+                <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                <input
+                  className="w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs outline-none focus:border-emerald-400"
+                  value={gearSearch}
+                  onChange={(e) => setGearSearch(e.target.value)}
+                  placeholder="搜索我的装备"
+                />
+              </div>
+              {matchedGear.length === 0 && (
+                <p className="py-8 text-center text-xs text-slate-300">装备库（在役）里没有匹配的装备</p>
+              )}
+              <div className="space-y-1.5">
+                {matchedGear.map((g) => {
+                  const added = existingNames.has(g.name)
+                  return (
+                    <div
+                      key={g.id}
+                      draggable={!added}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/gear-id', String(g.id))
+                        e.dataTransfer.effectAllowed = 'copy'
+                      }}
+                      onClick={() => addGear(g)}
+                      className={`group flex items-center gap-2 rounded-xl border px-3 py-2 cursor-grab active:cursor-grabbing transition-all ${
+                        added
+                          ? 'border-slate-100 bg-white/60 opacity-50'
+                          : 'border-slate-200/70 bg-white hover:border-emerald-300 hover:shadow-sm'
+                      }`}
+                      title={added ? '已在清单' : '点击或拖拽加入清单'}
+                    >
+                      <GearIcon category={g.category} size={14} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-slate-800 truncate">{g.name}</div>
+                        <div className="text-[10px] text-slate-400">
+                          {g.weightGrams != null ? `${g.weightGrams}g` : CATEGORY_LABELS[g.category - 1]}
+                        </div>
+                      </div>
+                      {added ? (
+                        <CheckCircle size={14} weight="fill" className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <Plus
+                          size={14}
+                          weight="bold"
+                          className={`shrink-0 text-slate-300 group-hover:text-emerald-600 transition-colors ${
+                            addingId === g.id ? 'animate-pulse' : ''
+                          }`}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* 手动添加（带目录联想） */}
+              <div className="mt-4 pt-3 border-t border-slate-200/60 space-y-2">
+                <div className="text-center text-[10px] text-slate-300">或手动添加临时条目</div>
+                <div className="relative">
+                  <input
+                    className={`${inputCls} text-xs`}
+                    value={newName}
+                    onChange={(e) => {
+                      setNewName(e.target.value)
+                      setShowCatalog(true)
                     }}
-                    onClick={() => addGear(g)}
-                    className={`group flex items-center gap-2 rounded-xl border px-3 py-2 cursor-grab active:cursor-grabbing transition-all ${
-                      added
-                        ? 'border-slate-100 bg-white/60 opacity-50'
-                        : 'border-slate-200/70 bg-white hover:border-emerald-300 hover:shadow-sm'
-                    }`}
-                    title={added ? '已在清单' : '点击或拖拽加入清单'}
+                    onFocus={() => setShowCatalog(true)}
+                    onBlur={() => setTimeout(() => setShowCatalog(false), 150)}
+                    placeholder="输入名称联想常用装备…"
+                    maxLength={100}
+                    autoComplete="off"
+                  />
+                  {showCatalog && catalogSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 bottom-full mb-1 z-10 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                      {catalogSuggestions.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pickCatalog(c)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-50 transition-colors text-left"
+                        >
+                          <GearIcon category={c.category} size={13} />
+                          <span className="flex-1 text-xs text-slate-700 truncate">{c.name}</span>
+                          {c.weightGrams != null && (
+                            <span className="font-mono text-[10px] text-slate-400">{c.weightGrams}g</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    className={`${inputCls} text-xs font-mono`}
+                    type="number"
+                    value={newWeight}
+                    onChange={(e) => setNewWeight(e.target.value)}
+                    placeholder="克重"
+                  />
+                  <button
+                    onClick={handleAddManual}
+                    className="shrink-0 px-4 bg-slate-900 text-white text-xs rounded-xl hover:bg-slate-800 active:scale-[0.98] transition-all"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-slate-800 truncate">{g.name}</div>
-                      <div className="text-[10px] text-slate-400">
-                        {CATEGORY_LABELS[g.category - 1]}
-                        {g.weightGrams != null && ` · ${g.weightGrams}g`}
+                    添加
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* 装包拼图视图：待装 → 背包（SVG 轮廓 + 仓位） + 随身 */
+          <div className="flex-1 overflow-y-auto px-7 py-4">
+            <div className="flex gap-4 items-stretch min-h-[430px]">
+              {/* 待装栏（拖出 = 打包；从背包拖回 = 取出） */}
+              <div
+                className="w-36 shrink-0 rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-3 overflow-y-auto transition-colors"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const id = Number(e.dataTransfer.getData('text/item-id'))
+                  const checked = Number(e.dataTransfer.getData('text/item-checked'))
+                  if (id && checked === 1) toggleItem(id, 1)
+                }}
+              >
+                <p className="text-[11px] font-semibold text-slate-500 mb-2">
+                  待装 <span className="font-mono text-slate-300">{unpacked.length}</span>
+                </p>
+                {unpacked.length === 0 && (
+                  <p className="text-[11px] text-slate-300 leading-relaxed py-2">都装进包里了，出发！</p>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {unpacked.map((item) => renderPackChip(item, false))}
+                </div>
+              </div>
+
+              {/* 背包画布 */}
+              <div className="flex-1 relative min-h-[430px] select-none">
+                {/* 轮廓 */}
+                <svg viewBox="0 0 200 260" className="absolute inset-0 w-full h-full" aria-hidden>
+                  <path d="M60,18 C52,60 52,150 60,205" stroke="#e2e8f0" strokeWidth="4" fill="none" strokeLinecap="round" />
+                  <path
+                    d="M50,84 C42,116 42,182 48,224 C50,240 60,248 76,248 L124,248 C140,248 150,240 152,224 C158,182 158,116 150,84 C146,64 132,56 114,54 L86,54 C68,56 54,64 50,84 Z"
+                    className="fill-white stroke-slate-200"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M64,38 L136,38 C146,38 152,44 152,52 L152,62 C152,66 149,68 145,68 L55,68 C51,68 48,66 48,62 L48,52 C48,44 54,38 64,38 Z"
+                    className="fill-slate-50 stroke-slate-200"
+                    strokeWidth="3"
+                  />
+                  <rect x="158" y="128" width="18" height="58" rx="9" className="fill-slate-50 stroke-slate-200" strokeWidth="3" />
+                </svg>
+
+                {/* 仓位（绝对定位；drop = 打包；显示按品类归位） */}
+                {[
+                  { slot: PACKING_SLOTS[1], style: { left: '26%', top: '12%', width: '48%', height: '14%' } },
+                  { slot: PACKING_SLOTS[3], style: { left: '24%', top: '28%', width: '52%', height: '18%' } },
+                  { slot: PACKING_SLOTS[2], style: { left: '24%', top: '47%', width: '52%', height: '20%' } },
+                  { slot: PACKING_SLOTS[4], style: { left: '26%', top: '68%', width: '48%', height: '24%' } },
+                ].map(({ slot, style }) => {
+                  const items = packedBySlot.find((s) => s.label === slot.label)?.items ?? []
+                  const recommended = dragItem != null && slotIndexOf(dragItem.category) === PACKING_SLOTS.indexOf(slot)
+                  return (
+                    <div
+                      key={slot.label}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const id = Number(e.dataTransfer.getData('text/item-id'))
+                        const checked = Number(e.dataTransfer.getData('text/item-checked'))
+                        if (id && checked !== 1) toggleItem(id, 1)
+                        setDragItem(null)
+                      }}
+                      className={`absolute rounded-2xl p-1.5 overflow-y-auto transition-all ${
+                        recommended
+                          ? 'border-2 border-dashed border-emerald-400 bg-emerald-50/70'
+                          : 'border border-slate-100 bg-white/40'
+                      }`}
+                      style={style}
+                      title={slot.tip}
+                    >
+                      <p className="text-[9px] text-slate-300 leading-tight px-0.5">{slot.label}</p>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {items.map((item) => renderPackChip(item))}
                       </div>
                     </div>
-                    {added ? (
-                      <CheckCircle size={14} weight="fill" className="text-emerald-500 shrink-0" />
-                    ) : (
-                      <Plus
-                        size={14}
-                        weight="bold"
-                        className={`shrink-0 text-slate-300 group-hover:text-emerald-600 transition-colors ${
-                          addingId === g.id ? 'animate-pulse' : ''
-                        }`}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
 
-            {/* 手动添加临时条目 */}
-            <div className="mt-4 pt-3 border-t border-slate-200/60 space-y-2">
-              <div className="text-center text-[10px] text-slate-300">或手动添加临时条目</div>
-              <input
-                className={`${inputCls} text-xs`}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="条目名，如：路餐（坚果+能量胶）"
-                maxLength={100}
-              />
-              <div className="flex gap-2">
-                <input
-                  className={`${inputCls} text-xs font-mono`}
-                  type="number"
-                  value={newWeight}
-                  onChange={(e) => setNewWeight(e.target.value)}
-                  placeholder="克重"
-                />
-                <button
-                  onClick={handleAddManual}
-                  className="shrink-0 px-4 bg-slate-900 text-white text-xs rounded-xl hover:bg-slate-800 active:scale-[0.98] transition-all"
-                >
-                  添加
-                </button>
+              {/* 随身仓（drop = 打包） */}
+              <div
+                className="w-40 shrink-0 rounded-3xl border-2 border-dashed border-slate-200 bg-white p-3 overflow-y-auto transition-all"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const id = Number(e.dataTransfer.getData('text/item-id'))
+                  const checked = Number(e.dataTransfer.getData('text/item-checked'))
+                  if (id && checked !== 1) toggleItem(id, 1)
+                  setDragItem(null)
+                }}
+              >
+                <p className="text-[11px] font-semibold text-slate-500">{PACKING_SLOTS[0].label}</p>
+                <p className="text-[10px] text-slate-300 mb-2">{PACKING_SLOTS[0].tip}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(packedBySlot.find((s) => s.label === PACKING_SLOTS[0].label)?.items ?? []).map((item) =>
+                    renderPackChip(item, false),
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <AnimatePresence>
           {error && (
@@ -603,7 +843,7 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute left-1/2 -translate-x-1/2 bottom-20 flex items-center gap-1.5 text-xs text-red-500 bg-white border border-red-100 shadow-lg rounded-full px-4 py-2"
+              className="absolute left-1/2 -translate-x-1/2 bottom-20 z-20 flex items-center gap-1.5 text-xs text-red-500 bg-white border border-red-100 shadow-lg rounded-full px-4 py-2"
             >
               <WarningCircle size={14} weight="fill" />
               {error}
