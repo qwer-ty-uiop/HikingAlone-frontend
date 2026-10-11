@@ -89,6 +89,13 @@ export default defineConfig({
         bypass: (req) =>
           req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
       },
+      // 个人中心驾驶舱：/profile 既是页面路由也是 API 前缀，与 /body 同款 bypass
+      '/profile': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
       // 用户模块：纯 API，无前端路由，无需 bypass（/user 页面不存在，浏览器刷新只会 404 到 index.html，属预期）
       '/user': {
         target: 'http://localhost:8080',

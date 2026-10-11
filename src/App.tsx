@@ -29,6 +29,7 @@ import GoalPage from './goal/GoalPage'
 import AchievementPage from './achievement/AchievementPage'
 import StatsPage from './stats/StatsPage'
 import KnowledgePage from './knowledge/KnowledgePage'
+import ProfilePage from './profile/ProfilePage'
 import AuthPage from './user/AuthPage'
 import { userApi } from './user/api'
 import type { HomeBanner, HomeData, NavMenu } from './types'
@@ -55,6 +56,7 @@ const PROTECTED_PAGES: Record<string, (props: { go: (link: string) => void }) =>
   '/achievement': AchievementPage,
   '/stats': StatsPage,
   '/knowledge': KnowledgePage,
+  '/profile': ProfilePage,
 }
 
 function App() {
@@ -120,8 +122,11 @@ function App() {
   }, [go])
 
   // 需登录页面：先看本地登录态，再看服务端会话校验是否完成——
-  // 两层都过才渲染页面，避免"先渲染页面、数据请求 401 后再被踢回登录"的闪屏
-  const ProtectedPage = PROTECTED_PAGES[path]
+  // 两层都过才渲染页面，避免"先渲染页面、数据请求 401 后再被踢回登录"的闪屏。
+  // 路由解析：先精确匹配，再前缀匹配（/routes/hot、/routes/xxx 都落到路线页）
+  const ProtectedPage =
+    PROTECTED_PAGES[path] ??
+    Object.entries(PROTECTED_PAGES).find(([prefix]) => path.startsWith(prefix + '/'))?.[1]
   if (ProtectedPage) {
     if (!email) {
       // 未登录直接访问受保护页（刷新/输 URL）：把当前历史条目替换为 /login，不残留原路径
