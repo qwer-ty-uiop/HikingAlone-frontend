@@ -23,7 +23,7 @@ export const gearItemApi = {
     if (keyword?.trim()) params.set('keyword', keyword.trim())
     if (limit != null) params.set('limit', String(limit))
     const qs = params.toString()
-    return request<GearCatalogItem[]>(`/gear/catalog${qs ? `?${qs}` : ''}`)
+    return request<GearCatalogItem[]>(`/gear/items/catalog${qs ? `?${qs}` : ''}`)
   },
 
   /** POST /gear/items 新建装备（默认在役） */

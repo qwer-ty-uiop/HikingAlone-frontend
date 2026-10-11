@@ -62,7 +62,8 @@ const PROTECTED_PAGES: Record<string, (props: { go: (link: string) => void }) =>
 }
 
 function App() {
-  const [path, setPath] = useState('/')
+  // 从地址栏初始化路由：直接输 URL / 刷新子页面时不再落回首页
+  const [path, setPath] = useState(() => window.location.pathname)
   const [email, setEmail] = useState<string | null>(() => localStorage.getItem(AUTH_EMAIL_KEY))
   // 是否已完成服务端会话校验：页面加载时用 GET /user/me 校准本地登录态，
   // 避免 localStorage 残留导致"前端以为已登录、后端会话已失效"的闪屏/反复跳转

@@ -71,11 +71,20 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
     setConfirmDelete(false)
   }, [open, initial])
 
-  /** 目录联想：名称非空时本地过滤（目录一次全量拉取，量级小） */
+  /** 归一化：去空格 + 小写（「格里高利B65」命中「格里高利 B65」） */
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase()
+
+  /** 目录联想：归一化匹配 名称/品牌/别名，命中即出下拉 */
   const suggestions =
     name.trim().length >= 1
       ? catalog
-          .filter((c) => c.name.includes(name.trim()) && c.name !== name.trim())
+          .filter(
+            (c) =>
+              norm(c.name) !== norm(name) &&
+              (norm(c.name).includes(norm(name)) ||
+                (c.brand ?? "").toLowerCase().includes(norm(name)) ||
+                (c.searchTerms ?? "").includes(name.trim().toLowerCase())),
+          )
           .slice(0, 6)
       : []
 
@@ -87,6 +96,16 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
     setBrand(c.brand ?? '')
     setShowSuggest(false)
   }
+
+  // 输入完整命中目录名时，无需点选直接自动补齐（打完整个名字也要享受参数带出）
+  useEffect(() => {
+    if (!open) return
+    const hit = catalog.find((c) => norm(c.name) === norm(name.trim()) && name.trim().length >= 2)
+    if (!hit) return
+    setCategory(hit.category)
+    if (hit.weightGrams != null) setWeight(String(hit.weightGrams))
+    if (hit.brand) setBrand(hit.brand)
+  }, [name, catalog, open])
 
   const validate = (): string => {
     if (!name.trim()) return '请填写装备名'

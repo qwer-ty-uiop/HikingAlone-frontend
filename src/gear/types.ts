@@ -23,6 +23,8 @@ export interface GearChecklistItem {
   /** 0 未打包 / 1 已打包 */
   checked: number
   sort: number
+  /** 装载仓位 0随身 1顶袋 2背部中段 3上部 4包底（null=按品类推荐） */
+  slot: number | null
 }
 
 /** 打包清单（含全部条目） */
@@ -77,6 +79,8 @@ export interface ChecklistItemUpdateDTO {
   checked?: number
   name?: string
   weightGrams?: number
+  /** 装载仓位 0~4（装包拼图自由换位） */
+  slot?: number
 }
 
 /** AI 装备建议（POST /gear/suggest）：source=LLM 个性化建议 / RULE 内置规则兜底 */
@@ -113,5 +117,7 @@ export interface GearCatalogItem {
   category: number
   /** 品牌（型号级条目，可空） */
   brand: string | null
+  /** 联想别名（可空） */
+  searchTerms: string | null
   weightGrams: number | null
 }

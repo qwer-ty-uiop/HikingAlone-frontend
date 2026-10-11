@@ -112,16 +112,17 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
   const totalWeight = checklist.items.reduce((sum, i) => sum + (i.weightGrams ?? 0), 0)
   const existingNames = new Set(checklist.items.map((i) => i.name))
 
-  /** 装包视图数据：已打包按品类归位到仓位；未打包进待装栏 */
-  const packedBySlot = PACKING_SLOTS.map((slot) => ({
+  const categoryOf = (item: GearChecklist['items'][number]): number =>
+    gearItems.find((g) => g.id === item.gearItemId)?.category ?? 11
+
+  /** 条目当前仓位：用户拖拽放置的 slot 优先，未放置时按品类推荐归位 */
+  const itemSlot = (item: GearChecklist['items'][number]): number =>
+    item.slot ?? slotIndexOf(categoryOf(item))
+
+  /** 装包视图数据：已打包按「条目自己的仓位」归位；未打包进待装栏 */
+  const packedBySlot = PACKING_SLOTS.map((slot, idx) => ({
     ...slot,
-    items: checklist.items.filter(
-      (i) =>
-        i.checked === 1 &&
-        slot.categories.includes(
-          gearItems.find((g) => g.id === i.gearItemId)?.category ?? 11,
-        ),
-    ),
+    items: checklist.items.filter((i) => i.checked === 1 && itemSlot(i) === idx),
   }))
   const unpacked = checklist.items.filter((i) => i.checked !== 1)
 
@@ -157,11 +158,19 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     (i) => !slotGroups.some((s) => s.items.includes(i)),
   )
 
-  /** 临时条目的目录联想 */
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase()
+
+  /** 临时条目的目录联想：归一化匹配 名称/品牌/别名 */
   const catalogSuggestions =
     newName.trim().length >= 1
       ? catalog
-          .filter((c) => c.name.includes(newName.trim()) && c.name !== newName.trim())
+          .filter(
+            (c) =>
+              norm(c.name) !== norm(newName) &&
+              (norm(c.name).includes(norm(newName)) ||
+                (c.brand ?? "").toLowerCase().includes(norm(newName)) ||
+                (c.searchTerms ?? "").includes(newName.trim().toLowerCase())),
+          )
           .slice(0, 5)
       : []
 
@@ -170,6 +179,15 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     if (c.weightGrams != null) setNewWeight(String(c.weightGrams))
     setShowCatalog(false)
   }
+
+  // 输入完整命中目录名时直接带出克重（打完整名也免填）
+  useEffect(() => {
+    if (!checklist) return
+    const hit = catalog.find(
+      (c) => norm(c.name) === norm(newName.trim()) && newName.trim().length >= 2,
+    )
+    if (hit?.weightGrams != null && !newWeight.trim()) setNewWeight(String(hit.weightGrams))
+  }, [newName, catalog, checklist])
 
   const toggleItem = async (id: number, checked: number) => {
     try {
@@ -789,18 +807,18 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
               <div className="flex-1 relative min-h-[430px] select-none">
                 {/* 轮廓 */}
                 <svg viewBox="0 0 200 260" className="absolute inset-0 w-full h-full" aria-hidden>
-                  <path d="M60,18 C52,60 52,150 60,205" stroke="#e2e8f0" strokeWidth="4" fill="none" strokeLinecap="round" />
+                  <path d="M60,18 C52,60 52,150 60,205" stroke="#cbd5e1" strokeWidth="4" fill="none" strokeLinecap="round" />
                   <path
                     d="M50,84 C42,116 42,182 48,224 C50,240 60,248 76,248 L124,248 C140,248 150,240 152,224 C158,182 158,116 150,84 C146,64 132,56 114,54 L86,54 C68,56 54,64 50,84 Z"
-                    className="fill-white stroke-slate-200"
-                    strokeWidth="3"
+                    className="fill-slate-50 stroke-slate-300"
+                    strokeWidth="4"
                   />
                   <path
                     d="M64,38 L136,38 C146,38 152,44 152,52 L152,62 C152,66 149,68 145,68 L55,68 C51,68 48,66 48,62 L48,52 C48,44 54,38 64,38 Z"
-                    className="fill-slate-50 stroke-slate-200"
-                    strokeWidth="3"
+                    className="fill-white stroke-slate-300"
+                    strokeWidth="4"
                   />
-                  <rect x="158" y="128" width="18" height="58" rx="9" className="fill-slate-50 stroke-slate-200" strokeWidth="3" />
+                  <rect x="158" y="128" width="18" height="58" rx="9" className="fill-slate-50 stroke-slate-300" strokeWidth="3.5" />
                 </svg>
 
                 {/* 仓位（绝对定位；drop = 打包；显示按品类归位） */}
@@ -819,8 +837,17 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                       onDrop={(e) => {
                         e.preventDefault()
                         const id = Number(e.dataTransfer.getData('text/item-id'))
-                        const checked = Number(e.dataTransfer.getData('text/item-checked'))
-                        if (id && checked !== 1) toggleItem(id, 1)
+                        if (id) {
+                          const item = checklist.items.find((i) => i.id === id)
+                          if (item) {
+                            const targetSlot = PACKING_SLOTS.indexOf(slot)
+                            const patch =
+                              item.checked === 1
+                                ? { id, slot: targetSlot }
+                                : { id, checked: 1, slot: targetSlot }
+                            gearChecklistApi.updateItem(patch).then(onChanged).catch(() => {})
+                          }
+                        }
                         setDragItem(null)
                       }}
                       className={`absolute rounded-2xl p-1.5 overflow-y-auto transition-all ${
@@ -855,8 +882,14 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                 onDrop={(e) => {
                   e.preventDefault()
                   const id = Number(e.dataTransfer.getData('text/item-id'))
-                  const checked = Number(e.dataTransfer.getData('text/item-checked'))
-                  if (id && checked !== 1) toggleItem(id, 1)
+                  if (id) {
+                    const item = checklist.items.find((i) => i.id === id)
+                    if (item) {
+                      const patch =
+                        item.checked === 1 ? { id, slot: 0 } : { id, checked: 1, slot: 0 }
+                      gearChecklistApi.updateItem(patch).then(onChanged).catch(() => {})
+                    }
+                  }
                   setDragItem(null)
                 }}
               >
