@@ -1,4 +1,4 @@
-import type { RouteCreateDTO, RouteTrack, RouteTrackDetail } from './types'
+import type { RouteCreateDTO, RouteHot, RouteTrack, RouteTrackDetail } from './types'
 
 const SUCCESS_CODE = 200
 
@@ -42,4 +42,10 @@ export const routeApi = {
 
   /** DELETE /routes/{id} 删除路线 */
   remove: (id: number) => request<null>(`/routes/${id}`, { method: 'DELETE' }),
+
+  /** GET /routes/hot 常走路线 Top N（按徒步日记引用次数聚合；limit 缺省 5，后端钳制 1~20） */
+  hot: (limit?: number) => {
+    const qs = limit == null ? '' : `?limit=${limit}`
+    return request<RouteHot[]>(`/routes/hot${qs}`)
+  },
 }

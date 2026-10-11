@@ -8,12 +8,15 @@ import {
   Clock,
   TrendUp,
   UploadSimple,
+  Fire,
 } from '@phosphor-icons/react'
 import { routeApi } from './api'
 import RouteUploadModal from './RouteUploadModal'
 import RouteDetailModal from './RouteDetailModal'
+import JournalFormModal from '../journal/JournalFormModal'
 import { formatDuration } from './RouteUploadModal'
-import type { RouteTrack } from './types'
+import { dateDot, todayStr } from '../components/ui'
+import type { RouteHot, RouteTrack, RouteTrackDetail } from './types'
 
 /** 列表 stagger 入场参数：父容器统一下发，子项逐个浮现 */
 const listContainer = {
@@ -66,20 +69,25 @@ interface RoutePageProps {
   go: (link: string) => void
 }
 
-/** 路线页：路线统计 + 轨迹列表 + 上传/详情弹窗 */
+/** 路线页：常走路线 + 路线统计 + 轨迹列表 + 上传/详情弹窗 + 一键写日记流转 */
 export default function RoutePage({ go }: RoutePageProps) {
   const [routes, setRoutes] = useState<RouteTrack[]>([])
+  const [hotRoutes, setHotRoutes] = useState<RouteHot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
+  // 「写日记」预填：详情弹窗一键流转，路线与指标自动带出
+  const [journalPrefill, setJournalPrefill] = useState<{ routeId: number; title: string } | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
     setError('')
-    routeApi
-      .list()
-      .then(setRoutes)
+    Promise.all([routeApi.list(), routeApi.hot(5).catch(() => [])])
+      .then(([list, hot]) => {
+        setRoutes(list)
+        setHotRoutes(hot)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [])
@@ -90,6 +98,12 @@ export default function RoutePage({ go }: RoutePageProps) {
 
   const totalDistance = routes.reduce((s, r) => s + (r.distance || 0), 0)
   const totalDuration = routes.reduce((s, r) => s + (r.durationMin || 0), 0)
+
+  /** 详情弹窗「写日记」：关闭详情，打开预填了路线与建议标题的日记表单 */
+  const handleWriteJournal = (detail: RouteTrackDetail) => {
+    setDetailId(null)
+    setJournalPrefill({ routeId: detail.id, title: `${detail.name} · ${todayStr()}` })
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -209,6 +223,41 @@ export default function RoutePage({ go }: RoutePageProps) {
               </div>
             </section>
 
+            {/* 常走路线：按徒步次数聚合，「再走一次」的起点 */}
+            {hotRoutes.length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-4">
+                  <Fire size={16} weight="fill" className="text-orange-500" />
+                  <h2 className="text-sm font-semibold text-slate-600">常走路线</h2>
+                  <div className="flex-1 h-px bg-slate-100" />
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+                  {hotRoutes.map((h, i) => (
+                    <motion.button
+                      key={h.routeId}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, damping: 20, delay: i * 0.06 }}
+                      onClick={() => setDetailId(h.routeId)}
+                      className="shrink-0 w-60 text-left rounded-3xl border border-orange-100/80 bg-gradient-to-br from-orange-50/70 to-white p-5 hover:border-orange-200 hover:shadow-[0_16px_32px_-12px_rgba(249,115,22,0.18)] transition-all active:scale-[0.99]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-bold text-slate-900 truncate">{h.name}</h3>
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-mono text-orange-600 bg-orange-100/70 px-2 py-0.5 rounded-full">
+                          <Fire size={10} weight="fill" />
+                          {h.hikeCount} 次
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+                        <span>{h.distanceKm.toFixed(1)} km</span>
+                        {h.lastHikeDate && <span>最近 {dateDot(h.lastHikeDate)}</span>}
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* 路线列表 */}
             <section>
               {routes.length === 0 ? (
@@ -307,7 +356,21 @@ export default function RoutePage({ go }: RoutePageProps) {
         <RouteUploadModal onClose={() => setShowUpload(false)} onCreated={load} />
       )}
       {detailId !== null && (
-        <RouteDetailModal routeId={detailId} onClose={() => setDetailId(null)} onDeleted={load} />
+        <RouteDetailModal
+          routeId={detailId}
+          onClose={() => setDetailId(null)}
+          onDeleted={load}
+          onWriteJournal={handleWriteJournal}
+        />
+      )}
+      {/* 轨迹详情一键流转的日记表单（路线与指标预填） */}
+      {journalPrefill && (
+        <JournalFormModal
+          open
+          prefill={journalPrefill}
+          onClose={() => setJournalPrefill(null)}
+          onSaved={load}
+        />
       )}
     </div>
   )

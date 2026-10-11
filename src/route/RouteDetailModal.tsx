@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { X, TrashSimple, CheckCircle, Clock, Path, TrendUp, MapPin, ArrowsOut } from '@phosphor-icons/react'
+import { X, TrashSimple, CheckCircle, Clock, Path, TrendUp, MapPin, ArrowsOut, BookOpen } from '@phosphor-icons/react'
 import { routeApi } from './api'
 import RouteMap from './RouteMap'
 import { formatDuration } from './RouteUploadModal'
@@ -10,10 +10,12 @@ interface RouteDetailModalProps {
   routeId: number
   onClose: () => void
   onDeleted: () => void
+  /** 「写日记」流转：把路线预填进日记表单（走完一次徒步的下一步） */
+  onWriteJournal?: (detail: RouteTrackDetail) => void
 }
 
-/** 路线详情弹窗：拉取完整轨迹点，地图渲染 + 统计 + 删除（两步确认） */
-export default function RouteDetailModal({ routeId, onClose, onDeleted }: RouteDetailModalProps) {
+/** 路线详情弹窗：拉取完整轨迹点，地图渲染 + 统计 + 写日记流转 + 删除（两步确认） */
+export default function RouteDetailModal({ routeId, onClose, onDeleted, onWriteJournal }: RouteDetailModalProps) {
   const [detail, setDetail] = useState<RouteTrackDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -156,26 +158,38 @@ export default function RouteDetailModal({ routeId, onClose, onDeleted }: RouteD
                   <MapPin size={12} weight="bold" className="text-emerald-600" />
                   轨迹点 {detail.points.length} 个
                 </span>
-                {/* 两步确认删除 */}
-                <button
-                  onClick={() => (confirmDelete ? handleDelete() : setConfirmDelete(true))}
-                  disabled={deleting}
-                  onMouseLeave={() => setConfirmDelete(false)}
-                  className={`flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-medium transition-all active:scale-[0.98] disabled:opacity-50 ${
-                    confirmDelete
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-slate-100 text-slate-500 hover:text-red-600 hover:bg-red-50'
-                  }`}
-                >
-                  {deleting ? (
-                    <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
-                  ) : confirmDelete ? (
-                    <CheckCircle size={13} weight="bold" />
-                  ) : (
-                    <TrashSimple size={13} weight="bold" />
+                <div className="flex items-center gap-2">
+                  {/* 一键流转：走完了 → 写日记（路线与指标自动预填） */}
+                  {onWriteJournal && (
+                    <button
+                      onClick={() => onWriteJournal(detail)}
+                      className="flex items-center gap-1 px-4 py-2 rounded-full text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-[0.98]"
+                    >
+                      <BookOpen size={13} weight="bold" />
+                      写日记
+                    </button>
                   )}
-                  {deleting ? '删除中' : confirmDelete ? '确认删除' : '删除路线'}
-                </button>
+                  {/* 两步确认删除 */}
+                  <button
+                    onClick={() => (confirmDelete ? handleDelete() : setConfirmDelete(true))}
+                    disabled={deleting}
+                    onMouseLeave={() => setConfirmDelete(false)}
+                    className={`flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-medium transition-all active:scale-[0.98] disabled:opacity-50 ${
+                      confirmDelete
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-slate-100 text-slate-500 hover:text-red-600 hover:bg-red-50'
+                    }`}
+                  >
+                    {deleting ? (
+                      <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+                    ) : confirmDelete ? (
+                      <CheckCircle size={13} weight="bold" />
+                    ) : (
+                      <TrashSimple size={13} weight="bold" />
+                    )}
+                    {deleting ? '删除中' : confirmDelete ? '确认删除' : '删除路线'}
+                  </button>
+                </div>
               </div>
             </>
           ) : (

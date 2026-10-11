@@ -63,3 +63,16 @@ export interface RouteCreateDTO {
   /** 途径点/命名标注点（无标注点传空数组） */
   waypoints: RouteWaypoint[]
 }
+
+/** GET /routes/hot 常走路线（按徒步日记引用次数聚合） */
+export interface RouteHot {
+  routeId: number
+  name: string
+  distanceKm: number
+  durationMin: number | null
+  elevationGain: number
+  hikeCount: number
+  /** yyyy-MM-dd */
+  lastHikeDate: string | null
+  firstHikeDate: string | null
+}
