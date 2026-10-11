@@ -1,8 +1,34 @@
-import { useState, useEffect, useCallback } from 'react'
-import { MapPin, CaretDown, Barbell, MapTrifold, UserCircle, SignOut, Heartbeat } from '@phosphor-icons/react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { motion } from 'framer-motion'
+import {
+  MapPin,
+  CaretDown,
+  Barbell,
+  MapTrifold,
+  UserCircle,
+  SignOut,
+  Heartbeat,
+  BookOpen,
+  Drop,
+  Backpack,
+  Flag,
+  Target,
+  Medal,
+  ChartLineUp,
+  Notebook,
+  ArrowRight,
+} from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
 import RoutePage from './route/RoutePage'
 import BodyPage from './body/BodyPage'
+import JournalPage from './journal/JournalPage'
+import DailyPage from './daily/DailyPage'
+import GearPage from './gear/GearPage'
+import WishPage from './wish/WishPage'
+import GoalPage from './goal/GoalPage'
+import AchievementPage from './achievement/AchievementPage'
+import StatsPage from './stats/StatsPage'
+import KnowledgePage from './knowledge/KnowledgePage'
 import AuthPage from './user/AuthPage'
 import { userApi } from './user/api'
 import type { HomeBanner, HomeData, NavMenu } from './types'
@@ -15,6 +41,21 @@ const AUTH_EMAIL_KEY = 'hikingalone.email'
 
 /** 登录后回跳目标页存储键：未登录点"进入训练"等被拦时记录，登录成功后跳回 */
 export const REDIRECT_KEY = 'hikingalone.redirect'
+
+/** 需登录页面路由 → 组件映射（新增受保护页面在此登记；页面路径若同时是 API 前缀，vite/nginx 也要加） */
+const PROTECTED_PAGES: Record<string, (props: { go: (link: string) => void }) => ReactNode> = {
+  '/train': TrainPage,
+  '/routes': RoutePage,
+  '/body': BodyPage,
+  '/journal': JournalPage,
+  '/daily': DailyPage,
+  '/gear': GearPage,
+  '/wish': WishPage,
+  '/goal': GoalPage,
+  '/achievement': AchievementPage,
+  '/stats': StatsPage,
+  '/knowledge': KnowledgePage,
+}
 
 function App() {
   const [path, setPath] = useState('/')
@@ -80,7 +121,8 @@ function App() {
 
   // 需登录页面：先看本地登录态，再看服务端会话校验是否完成——
   // 两层都过才渲染页面，避免"先渲染页面、数据请求 401 后再被踢回登录"的闪屏
-  if (path === '/train' || path === '/routes' || path === '/body') {
+  const ProtectedPage = PROTECTED_PAGES[path]
+  if (ProtectedPage) {
     if (!email) {
       // 未登录直接访问受保护页（刷新/输 URL）：把当前历史条目替换为 /login，不残留原路径
       return <RedirectToLogin setPath={setPath} />
@@ -88,9 +130,7 @@ function App() {
     if (!sessionChecked) {
       return <SessionChecking />
     }
-    if (path === '/train') return <TrainPage go={go} />
-    if (path === '/routes') return <RoutePage go={go} />
-    return <BodyPage go={go} />
+    return <ProtectedPage go={go} />
   }
 
   if (path === '/login') {
@@ -368,67 +408,151 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
           <p className="mt-3 text-sm text-amber-600 text-center">{error}</p>
         )}
 
-        {/* 训练打卡入口 */}
+        {/* 功能模块（bento 网格：主力模块大卡，轻量模块小卡，单列兜底） */}
         <section className="mt-10">
-          <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
-            <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
-              <Barbell size={22} weight="fill" className="text-emerald-600" />
-              训练打卡
-            </h2>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6">
-              制定周期性训练计划，每天提交完成情况，用日历热力图记录每一次坚持。
-            </p>
-            <button
+          <div className="flex items-center gap-3 mb-5">
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">功能模块</h2>
+            <div className="flex-1 h-px bg-slate-100" />
+          </div>
+          <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
+            <ModuleCard
+              featured
+              icon={<Barbell size={22} weight="fill" />}
+              title="训练打卡"
+              desc="制定周期性训练计划，每天提交完成情况，用日历热力图记录每一次坚持。训练是输入，徒步是输出。"
+              cta="进入训练"
               onClick={() => goProtected('/train')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
-            >
-              <Barbell size={14} weight="fill" />
-              进入训练
-            </button>
-          </div>
-        </section>
-
-        {/* 路线轨迹入口 */}
-        <section className="mt-10">
-          <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
-            <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
-              <MapTrifold size={22} weight="fill" className="text-emerald-600" />
-              路线轨迹
-            </h2>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6">
-              上传徒步轨迹文件（GPX / KML），自动统计里程、时长与累计爬升，在地图上回放每一步。
-            </p>
-            <button
+              className="lg:col-span-4"
+            />
+            <ModuleCard
+              icon={<MapTrifold size={20} weight="fill" />}
+              title="路线轨迹"
+              desc="上传 GPX / KML 轨迹，自动统计里程与爬升，在地图上回放每一步。"
               onClick={() => goProtected('/routes')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
-            >
-              <MapTrifold size={14} weight="fill" />
-              进入路线
-            </button>
-          </div>
-        </section>
-
-        {/* 身体数据入口 */}
-        <section className="mt-10">
-          <div className="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 p-8">
-            <h2 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
-              <Heartbeat size={22} weight="fill" className="text-emerald-600" />
-              身体数据
-            </h2>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6">
-              每天一分钟，记录体重与晨起静息心率。训练是输入，徒步是输出，身体的长期趋势是最好的效果验证。
-            </p>
-            <button
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<BookOpen size={20} weight="fill" />}
+              title="徒步日记"
+              desc="天气、同伴、花费与心情——数字之外的山野记忆。"
+              onClick={() => goProtected('/journal')}
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<Drop size={20} weight="fill" />}
+              title="每日打卡"
+              desc="饮水、步数、睡眠，一日三问。"
+              onClick={() => goProtected('/daily')}
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<Heartbeat size={20} weight="fill" />}
+              title="身体数据"
+              desc="每天一分钟，记录体重与晨起静息心率。"
               onClick={() => goProtected('/body')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 transition-all active:scale-[0.98]"
-            >
-              <Heartbeat size={14} weight="fill" />
-              进入记录
-            </button>
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<Backpack size={20} weight="fill" />}
+              title="装备与打包清单"
+              desc="装备台账称出基础重量，打包清单防止把帐篷忘在家里。"
+              onClick={() => goProtected('/gear')}
+              className="lg:col-span-3"
+            />
+            <ModuleCard
+              icon={<Flag size={20} weight="fill" />}
+              title="心愿单"
+              desc="种草 → 计划 → 走完 → 回顾，下次去哪先记下来。"
+              onClick={() => goProtected('/wish')}
+              className="lg:col-span-3"
+            />
+            <ModuleCard
+              icon={<Target size={20} weight="fill" />}
+              title="目标"
+              desc="月度 / 年度里程与次数目标，进度从日记自动累计。"
+              onClick={() => goProtected('/goal')}
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<Medal size={20} weight="fill" />}
+              title="成就徽章"
+              desc="里程碑实时计算，给坚持一个看得见的形状。"
+              onClick={() => goProtected('/achievement')}
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              icon={<ChartLineUp size={20} weight="fill" />}
+              title="年度报告"
+              desc="一年的公里数、爬升与月度分布，山替你记着。"
+              onClick={() => goProtected('/stats')}
+              className="lg:col-span-2"
+            />
+            <ModuleCard
+              wide
+              icon={<Notebook size={20} weight="fill" />}
+              title="知识库"
+              desc="安全守则、急救步骤、装备技巧——散落的经验，收成自己的山野手册。"
+              onClick={() => goProtected('/knowledge')}
+              className="lg:col-span-6"
+            />
           </div>
         </section>
       </main>
     </div>
+  )
+}
+
+/** 模块入口卡片：featured 为首页主推大卡（渐变底 + CTA 按钮），wide 为横贯全宽的扁卡 */
+function ModuleCard({
+  icon,
+  title,
+  desc,
+  onClick,
+  className = '',
+  featured = false,
+  wide = false,
+  cta,
+}: {
+  icon: ReactNode
+  title: string
+  desc: string
+  onClick: () => void
+  className?: string
+  featured?: boolean
+  wide?: boolean
+  cta?: string
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.99 }}
+      className={`text-left flex ${wide ? 'items-center gap-6' : 'flex-col'} p-6 md:p-8 rounded-3xl transition-all ${
+        featured
+          ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 hover:shadow-[0_20px_40px_-15px_rgba(16,185,129,0.2)]'
+          : 'bg-white border border-slate-200/50 hover:border-emerald-200 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)]'
+      } ${className}`}
+    >
+      <div
+        className={`shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center ${
+          featured ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'
+        }`}
+      >
+        {icon}
+      </div>
+      <div className={wide ? 'flex-1' : 'mt-4 flex-1'}>
+        <h3 className={`font-bold tracking-tight ${featured ? 'text-2xl' : 'text-base'} text-slate-900`}>
+          {title}
+        </h3>
+        <p className={`text-gray-500 leading-relaxed mt-1.5 ${featured ? 'text-sm' : 'text-[13px]'}`}>{desc}</p>
+        {featured && cta && (
+          <span className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm rounded-full font-medium hover:bg-emerald-700 transition-all">
+            {cta}
+            <ArrowRight size={14} weight="bold" />
+          </span>
+        )}
+      </div>
+    </motion.button>
   )
 }
 

@@ -39,6 +39,56 @@ export default defineConfig({
         bypass: (req) =>
           req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
       },
+      // 2026-10 功能批次：日记/每日打卡/装备/心愿单/目标/成就/统计/知识库，
+      // 均为「页面路由即 API 前缀」，与 /body 同款 bypass
+      '/journal': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/daily': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/gear': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/wish': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/goal': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/achievement': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/stats': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
+      '/knowledge': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass: (req) =>
+          req.headers.accept?.includes('text/html') ? '/index.html' : undefined,
+      },
       // 用户模块：纯 API，无前端路由，无需 bypass（/user 页面不存在，浏览器刷新只会 404 到 index.html，属预期）
       '/user': {
         target: 'http://localhost:8080',
