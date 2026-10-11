@@ -12,11 +12,39 @@ import {
   User,
   Coins,
   WarningCircle,
+  Smiley,
+  SmileyMeh,
+  SmileySad,
+  SmileyWink,
+  SmileySticker,
 } from '@phosphor-icons/react'
 import { journalApi } from './api'
 import JournalFormModal, { DIFFICULTY_LABELS, MOOD_LABELS } from './JournalFormModal'
 import { CountUp, CountUpDecimal, Magnetic, MotionList, MotionItem, dateDot } from '../components/ui'
 import type { JournalDetail, JournalItem, JournalSummary } from './types'
+
+/** 心情表情刻度：1 疲惫 ~ 5 震撼 */
+const MOOD_ICONS = [SmileySad, SmileyMeh, Smiley, SmileyWink, SmileySticker]
+const MOOD_COLORS = ['text-slate-400', 'text-slate-400', 'text-emerald-500', 'text-emerald-500', 'text-amber-500']
+
+/** 难度五点强度条 */
+function DifficultyDots({ level }: { level: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" title={`难度 ${level}/5`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={`w-1.5 h-1.5 rounded-full ${i <= level ? 'bg-slate-800' : 'bg-slate-200'}`}
+        />
+      ))}
+    </span>
+  )
+}
+
+function MoodFace({ level, size = 13 }: { level: number; size?: number }) {
+  const Icon = MOOD_ICONS[level - 1] ?? Smiley
+  return <Icon size={size} weight="fill" className={MOOD_COLORS[level - 1]} />
+}
 
 interface JournalPageProps {
   go: (link: string) => void
@@ -263,9 +291,11 @@ export default function JournalPage({ go }: JournalPageProps) {
                             <div className="flex items-center gap-2 text-[11px] text-slate-400">
                               <span className="font-mono">{dateDot(item.hikeDate)}</span>
                               <span>·</span>
+                              <DifficultyDots level={item.difficulty} />
                               <span>{DIFFICULTY_LABELS[item.difficulty - 1]}</span>
                               <span>·</span>
-                              <span className="text-emerald-600 font-medium">
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                                <MoodFace level={item.mood} />
                                 {MOOD_LABELS[item.mood - 1]}
                               </span>
                             </div>

@@ -16,7 +16,7 @@ export function formatDuration(min: number): string {
 
 interface RouteUploadModalProps {
   onClose: () => void
-  onCreated: () => void
+  onCreated: (newRouteId: number) => void
 }
 
 /** 上传路线弹窗：选择 .gpx → 前端解析轨迹点并预览地图/统计 → 提交（指标由后端领域层权威计算） */
@@ -68,13 +68,13 @@ export default function RouteUploadModal({ onClose, onCreated }: RouteUploadModa
     setSubmitting(true)
     setParseError('')
     try {
-      await routeApi.create({
+      const newRouteId = await routeApi.create({
         name: name.trim(),
         description: description.trim(),
         points,
         waypoints,
       })
-      onCreated()
+      onCreated(newRouteId)
       onClose()
     } catch (e) {
       setParseError(e instanceof Error ? e.message : '保存失败')

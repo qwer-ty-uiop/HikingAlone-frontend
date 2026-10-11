@@ -111,5 +111,7 @@ export interface GearCatalogItem {
   name: string
   /** 品类 1~11 */
   category: number
+  /** 品牌（型号级条目，可空） */
+  brand: string | null
   weightGrams: number | null
 }

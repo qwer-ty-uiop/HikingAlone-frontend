@@ -15,7 +15,8 @@ import {
 } from '@phosphor-icons/react'
 import { gearChecklistApi, gearItemApi, gearSuggestApi } from './api'
 import { CATEGORY_LABELS } from './GearItemFormModal'
-import GearIcon from '../components/GearIcon'
+import GearIcon, { categoryTextClass } from '../components/GearIcon'
+import GearSilhouette from '../components/GearSilhouette'
 import type { GearCatalogItem, GearChecklist, GearItem, GearSuggest, GearSuggestItem } from './types'
 
 const inputCls =
@@ -123,6 +124,27 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
     ),
   }))
   const unpacked = checklist.items.filter((i) => i.checked !== 1)
+
+  /** 重量账本：空包重 = 清单中的背包条目合计；装载重 = 其余已打包条目；总重 = 两者之和 */
+  const packWeights = (() => {
+    const packed = checklist.items.filter((i) => i.checked === 1)
+    const baseWeight = packed
+      .filter((i) => (gearItems.find((g) => g.id === i.gearItemId)?.category ?? 11) === 1)
+      .reduce((s, i) => s + (i.weightGrams ?? 0), 0)
+    const totalWeight = packed.reduce((s, i) => s + (i.weightGrams ?? 0), 0)
+    const loadWeight = totalWeight - baseWeight
+    const tier =
+      totalWeight === 0
+        ? { advice: '从左侧拖一件装备进背包，开始称重。', toneClass: 'text-slate-400' }
+        : totalWeight <= 8000
+          ? { advice: '轻量级 ✓：这个基重走长线都舒服。', toneClass: 'text-emerald-600' }
+          : totalWeight <= 15000
+            ? { advice: '标准范围：注意重物贴背、大件压底。', toneClass: 'text-slate-500' }
+            : totalWeight <= 20000
+              ? { advice: '偏重：逐件检查「真的要带吗」，超过 15kg 膝盖会很累。', toneClass: 'text-amber-600' }
+              : { advice: '重装警告：超过 20kg 的包是对膝盖的酷刑，强烈建议减重。', toneClass: 'text-red-500' }
+    return { baseWeight, loadWeight, totalWeight, ...tier }
+  })()
 
   /** 按装包位置分组的列表视图分组 */
   const slotGroups = PACKING_SLOTS.map((slot) => ({
@@ -350,7 +372,12 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
         }`}
         title={item.name}
       >
-        <GearIcon category={category} size={compact ? 12 : 14} />
+        <GearSilhouette
+          category={category}
+          size={compact ? 16 : 19}
+          className={categoryTextClass(category)}
+          title={item.name}
+        />
         <span className="text-[11px] text-slate-700 max-w-[72px] truncate">{item.name}</span>
         {item.weightGrams != null && (
           <span className="font-mono text-[9px] text-slate-300">
@@ -804,7 +831,14 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                       style={style}
                       title={slot.tip}
                     >
-                      <p className="text-[9px] text-slate-300 leading-tight px-0.5">{slot.label}</p>
+                      <p className="text-[9px] text-slate-400 leading-tight px-0.5 flex items-center justify-between gap-1">
+                        <span className="truncate">{slot.label}</span>
+                        <span className="font-mono shrink-0">
+                          {((packedBySlot.find((s) => s.label === slot.label)?.items ?? [])
+                            .reduce((s, i) => s + (i.weightGrams ?? 0), 0) / 1000).toFixed(1)}
+                          kg
+                        </span>
+                      </p>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {items.map((item) => renderPackChip(item))}
                       </div>
@@ -813,9 +847,10 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                 })}
               </div>
 
-              {/* 随身仓（drop = 打包） */}
-              <div
-                className="w-40 shrink-0 rounded-3xl border-2 border-dashed border-slate-200 bg-white p-3 overflow-y-auto transition-all"
+              {/* 随身仓（drop = 打包） + 重量账本 */}
+              <div className="w-40 shrink-0 flex flex-col gap-3">
+                <div
+                  className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-3 overflow-y-auto transition-all"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault()
@@ -833,8 +868,31 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
                   )}
                 </div>
               </div>
+
+              {/* 重量账本：空包重 / 装载重 / 总重 + 档位建议 */}
+              <div className="rounded-2xl border border-slate-200/70 bg-white p-3.5">
+                <p className="text-[11px] font-semibold text-slate-600 mb-2">重量账本</p>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">空包重</span>
+                    <span className="font-mono text-slate-700">{(packWeights.baseWeight / 1000).toFixed(1)} kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">装载重</span>
+                    <span className="font-mono text-slate-700">{(packWeights.loadWeight / 1000).toFixed(1)} kg</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-100 pt-1">
+                    <span className="text-slate-600 font-medium">打包总重</span>
+                    <span className="font-mono text-slate-900 font-semibold">
+                      {(packWeights.totalWeight / 1000).toFixed(1)} kg
+                    </span>
+                  </div>
+                </div>
+                <p className={`mt-2 text-[10px] leading-relaxed ${packWeights.toneClass}`}>{packWeights.advice}</p>
+              </div>
             </div>
           </div>
+        </div>
         )}
 
         <AnimatePresence>

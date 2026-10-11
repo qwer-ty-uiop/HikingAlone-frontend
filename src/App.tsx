@@ -32,6 +32,8 @@ import KnowledgePage from './knowledge/KnowledgePage'
 import ProfilePage from './profile/ProfilePage'
 import AuthPage from './user/AuthPage'
 import { userApi } from './user/api'
+import { profileApi } from './profile/api'
+import type { Dashboard } from './profile/types'
 import type { HomeBanner, HomeData, NavMenu } from './types'
 
 /** 后端统一返回成功状态码 */
@@ -193,6 +195,7 @@ interface HomePageProps {
 
 function HomePage({ go, email, onLogout }: HomePageProps) {
   const [home, setHome] = useState<HomeData | null>(null)
+  const [dash, setDash] = useState<Dashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [bannerIndex, setBannerIndex] = useState(0)
@@ -210,6 +213,15 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
     },
     [email, go],
   )
+
+  // 登录时静默拉取驾驶舱聚合，给模块入口卡挂实时数字（未登录/失败都不打扰）
+  useEffect(() => {
+    if (!email) return
+    profileApi
+      .dashboard()
+      .then(setDash)
+      .catch(() => {})
+  }, [email])
 
   // 拉取首页数据 GET /home
   useEffect(() => {
@@ -434,6 +446,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="路线轨迹"
               desc="上传 GPX / KML 轨迹，自动统计里程与爬升，在地图上回放每一步。"
               onClick={() => goProtected('/routes')}
+              badge={dash ? `${dash.hiking.totalCount} 次徒步` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -441,6 +454,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="徒步日记"
               desc="天气、同伴、花费与心情——数字之外的山野记忆。"
               onClick={() => goProtected('/journal')}
+              badge={dash ? `今年 ${dash.hiking.thisYearCount} 次` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -448,6 +462,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="每日打卡"
               desc="饮水、步数、睡眠，一日三问。"
               onClick={() => goProtected('/daily')}
+              badge={dash?.today.waterCups != null ? `今日 ${dash.today.waterCups} 杯` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -455,6 +470,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="身体数据"
               desc="每天一分钟，记录体重与晨起静息心率。"
               onClick={() => goProtected('/body')}
+              badge={dash && dash.streaks.bodyStreakDays > 0 ? `连续 ${dash.streaks.bodyStreakDays} 天` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -469,6 +485,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="心愿单"
               desc="种草 → 计划 → 走完 → 回顾，下次去哪先记下来。"
               onClick={() => goProtected('/wish')}
+              badge={dash ? `待出发 ${dash.wish.plannedCount + dash.wish.wishCount}` : null}
               className="lg:col-span-3"
             />
             <ModuleCard
@@ -476,6 +493,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="目标"
               desc="月度 / 年度里程与次数目标，进度从日记自动累计。"
               onClick={() => goProtected('/goal')}
+              badge={dash ? `进行中 ${dash.activeGoals.length}` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -483,6 +501,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="成就徽章"
               desc="里程碑实时计算，给坚持一个看得见的形状。"
               onClick={() => goProtected('/achievement')}
+              badge={dash ? `${dash.achievement.achievedCount}/${dash.achievement.totalCount}` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -490,6 +509,7 @@ function HomePage({ go, email, onLogout }: HomePageProps) {
               title="年度报告"
               desc="一年的公里数、爬升与月度分布，山替你记着。"
               onClick={() => goProtected('/stats')}
+              badge={dash ? `今年 ${dash.hiking.thisYearDistanceKm.toFixed(0)} km` : null}
               className="lg:col-span-2"
             />
             <ModuleCard
@@ -517,6 +537,7 @@ function ModuleCard({
   featured = false,
   wide = false,
   cta,
+  badge,
 }: {
   icon: ReactNode
   title: string
@@ -526,18 +547,25 @@ function ModuleCard({
   featured?: boolean
   wide?: boolean
   cta?: string
+  /** 右上角实时数字（登录后由驾驶舱聚合提供） */
+  badge?: string | null
 }) {
   return (
     <motion.button
       onClick={onClick}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.99 }}
-      className={`text-left flex ${wide ? 'items-center gap-6' : 'flex-col'} p-6 md:p-8 rounded-3xl transition-all ${
+      className={`relative text-left flex ${wide ? 'items-center gap-6' : 'flex-col'} p-6 md:p-8 rounded-3xl transition-all ${
         featured
           ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/60 hover:shadow-[0_20px_40px_-15px_rgba(16,185,129,0.2)]'
           : 'bg-white border border-slate-200/50 hover:border-emerald-200 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)]'
       } ${className}`}
     >
+      {badge && (
+        <span className="absolute top-4 right-4 px-2 py-0.5 rounded-full bg-slate-900/85 text-white text-[10px] font-mono">
+          {badge}
+        </span>
+      )}
       <div
         className={`shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center ${
           featured ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'

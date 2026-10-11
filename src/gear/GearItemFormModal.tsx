@@ -79,11 +79,12 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
           .slice(0, 6)
       : []
 
-  /** 点选联想项：自动补齐品类与克重，仅空值字段也回填（用户已填的克重不覆盖） */
+  /** 点选联想项：自动补齐名称/品类/克重/品牌（用户已填的克重不覆盖） */
   const pickCatalog = (c: GearCatalogItem) => {
     setName(c.name)
     setCategory(c.category)
     if (c.weightGrams != null) setWeight(String(c.weightGrams))
+    setBrand(c.brand ?? '')
     setShowSuggest(false)
   }
 
@@ -190,7 +191,10 @@ export default function GearItemFormModal({ open, initial, onClose, onSaved }: G
                         className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-emerald-50 transition-colors text-left"
                       >
                         <GearIcon category={c.category} size={15} />
-                        <span className="flex-1 text-sm text-slate-700 truncate">{c.name}</span>
+                        <span className="flex-1 text-sm text-slate-700 truncate">
+                          {c.name}
+                          {c.brand && <span className="ml-1.5 text-[10px] text-slate-400">{c.brand}</span>}
+                        </span>
                         {c.weightGrams != null && (
                           <span className="font-mono text-[11px] text-slate-400">{c.weightGrams}g</span>
                         )}

@@ -9,9 +9,15 @@ interface StatsPageProps {
   go: (link: string) => void
 }
 
-/** 月度里程柱状图（纯 SVG，柱高弹簧动画） */
-function MonthlyBars({ monthly }: { monthly: YearlyStats['monthly'] }) {
-  const max = Math.max(...monthly.map((m) => m.distanceKm), 1)
+/** 月度里程柱状图（纯 SVG，柱高弹簧动画；prev 存在时画今年 vs 去年双柱对比） */
+function MonthlyBars({
+  monthly,
+  prev,
+}: {
+  monthly: YearlyStats['monthly']
+  prev?: YearlyStats['monthly'] | null
+}) {
+  const max = Math.max(...monthly.map((m) => m.distanceKm), ...(prev ?? []).map((m) => m.distanceKm), 1)
   const W = 640
   const H = 200
   const PAD = { l: 8, r: 8, t: 12, b: 24 }
@@ -26,17 +32,38 @@ function MonthlyBars({ monthly }: { monthly: YearlyStats['monthly'] }) {
         const y = H - PAD.b - h
         return (
           <g key={m.month}>
-            {m.distanceKm > 0 && (
-              <motion.rect
-                x={x}
-                initial={{ y: H - PAD.b, height: 0 }}
-                animate={{ y, height: h }}
-                transition={{ type: 'spring', stiffness: 60, damping: 20, delay: i * 0.04 }}
-                width={barWidth}
-                rx={4}
-                fill={i === new Date().getMonth() ? '#10b981' : '#cbd5e1'}
-              />
-            )}
+            {(() => {
+              const prevMonth = prev?.[m.month - 1]
+              const hasPrev = prevMonth != null && prevMonth.distanceKm > 0
+              const w = hasPrev ? barWidth / 2 - 1 : barWidth
+              const prevH = hasPrev ? ((H - PAD.t - PAD.b) * (prevMonth?.distanceKm ?? 0)) / max : 0
+              return (
+                <>
+                  {hasPrev && (
+                    <motion.rect
+                      x={x}
+                      initial={{ y: H - PAD.b, height: 0 }}
+                      animate={{ y: H - PAD.b - prevH, height: prevH }}
+                      transition={{ type: 'spring', stiffness: 60, damping: 20, delay: i * 0.04 }}
+                      width={w}
+                      rx={3}
+                      fill="#cbd5e1"
+                    />
+                  )}
+                  {m.distanceKm > 0 && (
+                    <motion.rect
+                      x={hasPrev ? x + w + 2 : x}
+                      initial={{ y: H - PAD.b, height: 0 }}
+                      animate={{ y, height: h }}
+                      transition={{ type: 'spring', stiffness: 60, damping: 20, delay: i * 0.04 }}
+                      width={w}
+                      rx={4}
+                      fill={i === new Date().getMonth() ? '#10b981' : '#94a3b8'}
+                    />
+                  )}
+                </>
+              )
+            })()}
             {m.hikeCount > 0 && h > 16 && (
               <text
                 x={x + barWidth / 2}
@@ -68,6 +95,7 @@ function MonthlyBars({ monthly }: { monthly: YearlyStats['monthly'] }) {
 
 export default function StatsPage({ go }: StatsPageProps) {
   const [stats, setStats] = useState<YearlyStats | null>(null)
+  const [prevStats, setPrevStats] = useState<YearlyStats | null>(null)
   const [years, setYears] = useState<{ year: number; hikeCount: number }[]>([])
   const [year, setYear] = useState<number>(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
@@ -85,6 +113,11 @@ export default function StatsPage({ go }: StatsPageProps) {
 
   useEffect(() => {
     load(year)
+    // 对比数据：去年同接口，静默失败不影响主图
+    statsApi
+      .annual(year - 1)
+      .then((s) => setPrevStats(s.hikeCount > 0 ? s : null))
+      .catch(() => setPrevStats(null))
   }, [load, year])
 
   useEffect(() => {
@@ -226,9 +259,19 @@ export default function StatsPage({ go }: StatsPageProps) {
               <div className="flex items-center gap-2 mb-6">
                 <ChartBar size={16} weight="bold" className="text-emerald-600" />
                 <h2 className="font-bold text-slate-900">月度里程分布</h2>
+                {prevStats && (
+                  <span className="flex items-center gap-2 text-[10px] text-slate-400">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-slate-200 inline-block" /> 去年
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-slate-400 inline-block" /> 今年
+                    </span>
+                  </span>
+                )}
                 <span className="ml-auto text-[11px] text-slate-300 font-mono">单位 km</span>
               </div>
-              <MonthlyBars monthly={stats?.monthly ?? []} />
+              <MonthlyBars monthly={stats?.monthly ?? []} prev={prevStats?.monthly ?? null} />
             </section>
 
             {/* 亮点 */}

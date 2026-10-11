@@ -14,6 +14,9 @@ import {
 } from '@phosphor-icons/react'
 
 /** 品类 → 图标与配色的统一映射（装包可视化/列表/联想下拉共用） */
+export function categoryTextClass(category: number | null | undefined): string {
+  return (META[category ?? 11] ?? META[11]).color
+}
 const META: Record<number, { icon: Icon; color: string; bg: string }> = {
   1: { icon: Backpack, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   2: { icon: Tent, color: 'text-sky-600', bg: 'bg-sky-50' },

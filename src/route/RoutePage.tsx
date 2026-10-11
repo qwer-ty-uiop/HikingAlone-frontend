@@ -107,6 +107,17 @@ export default function RoutePage({ go }: RoutePageProps) {
     setJournalPrefill({ routeId: detail.id, title: `${detail.name} · ${todayStr()}` })
   }
 
+  /** 上传成功即弹出预填日记：走完一次徒步的记录闭环从这一刻开始 */
+  const handleCreated = (newRouteId: number) => {
+    load()
+    routeApi
+      .get(newRouteId)
+      .then((detail) => {
+        setJournalPrefill({ routeId: detail.id, title: `${detail.name} · ${todayStr()}` })
+      })
+      .catch(() => {})
+  }
+
   return (
     <div className="min-h-[100dvh] bg-background">
       {/* 环境氛围：右上角 emerald 光晕 + 左下角暖光，固定层不拦截交互 */}
@@ -363,7 +374,7 @@ export default function RoutePage({ go }: RoutePageProps) {
 
       {/* 弹窗 */}
       {showUpload && (
-        <RouteUploadModal onClose={() => setShowUpload(false)} onCreated={load} />
+        <RouteUploadModal onClose={() => setShowUpload(false)} onCreated={handleCreated} />
       )}
       {detailId !== null && (
         <RouteDetailModal

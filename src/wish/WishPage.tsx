@@ -269,7 +269,22 @@ export default function WishPage({ go }: WishPageProps) {
             {/* 按状态分列 */}
             <MotionList className="grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
               {STATUS_ORDER.map((status) => {
-                const wishes = (list ?? []).filter((w) => w.status === status)
+                const soonOf = (w: Wish): number | null => {
+                  // 出发临近：7 天内有期望日期的活动态心愿，置顶并高亮
+                  if (status > 1 || !w.expectedDate) return null
+                  const days = Math.ceil(
+                    (new Date(w.expectedDate).getTime() - Date.now()) / 86400000,
+                  )
+                  return days >= -3 && days <= 7 ? days : null
+                }
+                const wishes = (list ?? [])
+                  .filter((w) => w.status === status)
+                  .sort((a, b) => {
+                    const da = soonOf(a)
+                    const db = soonOf(b)
+                    if (da != null || db != null) return (da ?? 99) - (db ?? 99)
+                    return 0
+                  })
                 return (
                   <MotionItem key={status}>
                     <div className="rounded-4xl border border-slate-200/50 bg-white/60 p-5 min-h-[200px]">
@@ -293,7 +308,9 @@ export default function WishPage({ go }: WishPageProps) {
                               className={`rounded-2xl border p-4 transition-all ${
                                 w.status === 3
                                   ? 'border-slate-100 bg-slate-50/60 opacity-60'
-                                  : 'border-slate-100 bg-white hover:border-slate-200'
+                                  : soonOf(w) != null
+                                    ? 'border-amber-200 bg-amber-50/40 hover:border-amber-300'
+                                    : 'border-slate-100 bg-white hover:border-slate-200'
                               }`}
                             >
                               <div className="flex items-start justify-between gap-2">
@@ -315,12 +332,24 @@ export default function WishPage({ go }: WishPageProps) {
                                   {w.location}
                                 </p>
                               )}
-                              {w.expectedDate && (
-                                <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-                                  <CalendarBlank size={11} />
-                                  期望 {dateDot(w.expectedDate)}
-                                </p>
-                              )}
+                              {w.expectedDate && (() => {
+                                const soon = soonOf(w)
+                                return (
+                                  <p
+                                    className={`mt-0.5 flex items-center gap-1 text-[11px] font-mono ${
+                                      soon != null ? 'text-amber-600 font-semibold' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    <CalendarBlank size={11} />
+                                    期望 {dateDot(w.expectedDate)}
+                                    {soon != null && (
+                                      <span className="ml-auto px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px]">
+                                        {soon < 0 ? '已到行程' : `${soon} 天后`}
+                                      </span>
+                                    )}
+                                  </p>
+                                )
+                              })()}
                               {w.status === 2 && w.doneDate && (
                                 <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600 font-mono">
                                   <CheckCircle size={11} weight="fill" />
