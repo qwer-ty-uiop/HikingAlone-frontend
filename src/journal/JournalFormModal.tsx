@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { WarningCircle } from '@phosphor-icons/react'
+import { WarningCircle, Flag } from '@phosphor-icons/react'
 import DateField from '../train/DateField'
 import { todayStr } from '../components/ui'
 import { routeApi } from '../route/api'
 import { journalApi } from './api'
+import { wishApi } from '../wish/api'
 import type { RouteTrack } from '../route/types'
+import type { Wish } from '../wish/types'
 import type { JournalDetail, JournalSaveDTO } from './types'
 
 /** 难度/心情标签（与后端取值一致） */
@@ -19,14 +21,17 @@ const labelCls = 'block text-xs font-medium text-slate-500 mb-1.5'
 interface JournalFormModalProps {
   open: boolean
   initial?: JournalDetail | null
+  /** 外部预填（轨迹详情「写日记」流转）：routeId + 建议标题 */
+  prefill?: { routeId?: number; title?: string } | null
   onClose: () => void
   onSaved: () => void
 }
 
 /**
- * 新建/编辑日记弹窗：routeId 选中后，里程/时长/爬升留空则由后端从轨迹自动带出
+ * 新建/编辑日记弹窗：routeId 选中后，里程/时长/爬升留空则由后端从轨迹自动带出；
+ * 保存时可勾选一条进行中的心愿，日记落库后自动标记该心愿完成（一键闭环）
  */
-export default function JournalFormModal({ open, initial, onClose, onSaved }: JournalFormModalProps) {
+export default function JournalFormModal({ open, initial, prefill, onClose, onSaved }: JournalFormModalProps) {
   const [title, setTitle] = useState('')
   const [hikeDate, setHikeDate] = useState(todayStr())
   const [routeId, setRouteId] = useState<string>('')
@@ -42,8 +47,11 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // 保存后联动完成的心愿（可选）
+  const [wishId, setWishId] = useState('')
+  const [activeWishes, setActiveWishes] = useState<Wish[]>([])
 
-  // 打开时回填（编辑）或重置（新建），并拉路线列表供选择
+  // 打开时回填（编辑 > 外部预填 > 全新），并拉路线列表与进行中心愿供选择
   useEffect(() => {
     if (!open) return
     if (initial) {
@@ -59,6 +67,19 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
       setCompanions(initial.companions ?? '')
       setCost(initial.cost == null ? '' : String(initial.cost))
       setContent(initial.content ?? '')
+    } else if (prefill) {
+      setTitle(prefill.title ?? '')
+      setHikeDate(todayStr())
+      setRouteId(prefill.routeId == null ? '' : String(prefill.routeId))
+      setDistance('')
+      setDuration('')
+      setElevation('')
+      setDifficulty(3)
+      setMood(3)
+      setWeather('')
+      setCompanions('独行')
+      setCost('')
+      setContent('')
     } else {
       setTitle('')
       setHikeDate(todayStr())
@@ -74,11 +95,16 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
       setContent('')
     }
     setError('')
+    setWishId('')
     routeApi
       .list()
       .then(setRoutes)
       .catch(() => setRoutes([]))
-  }, [open, initial])
+    wishApi
+      .list()
+      .then((list) => setActiveWishes(list.filter((w) => w.status === 0 || w.status === 1)))
+      .catch(() => setActiveWishes([]))
+  }, [open, initial, prefill])
 
   const validate = (): string => {
     if (!title.trim()) return '请填写标题'
@@ -127,9 +153,11 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
         content: content.trim() || undefined,
       }
       if (initial) {
-        await journalApi.update({ ...dto, id: initial.id })
+        const saved = await journalApi.update({ ...dto, id: initial.id })
+        await completeWishIfChosen(saved.id)
       } else {
-        await journalApi.create(dto)
+        const saved = await journalApi.create(dto)
+        await completeWishIfChosen(saved.id)
       }
       onSaved()
       onClose()
@@ -137,6 +165,16 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
       setError(e instanceof Error ? e.message : '提交失败')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  /** 勾选了心愿时：日记落库后自动标记完成（失败不阻断主流程） */
+  async function completeWishIfChosen(journalId: number) {
+    if (!wishId) return
+    try {
+      await wishApi.complete({ id: Number(wishId), journalId })
+    } catch {
+      // 心愿联动失败时静默：日记本身已保存成功
     }
   }
 
@@ -307,6 +345,26 @@ export default function JournalFormModal({ open, initial, onClose, onSaved }: Jo
                   maxLength={8000}
                 />
               </div>
+              {activeWishes.length > 0 && (
+                <div>
+                  <label className={`${labelCls} flex items-center gap-1`}>
+                    <Flag size={11} weight="fill" className="text-rose-400" />
+                    完成心愿（可选，保存后自动标记完成）
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={wishId}
+                    onChange={(e) => setWishId(e.target.value)}
+                  >
+                    <option value="">不关联</option>
+                    {activeWishes.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <AnimatePresence>
                 {error && (
                   <motion.p
