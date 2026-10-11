@@ -11,6 +11,7 @@ import {
   ArrowClockwise,
 } from '@phosphor-icons/react'
 import { goalApi } from './api'
+import { journalApi } from '../journal/api'
 import { CountUp, Magnetic, MotionList, MotionItem } from '../components/ui'
 import type { Goal, GoalCreateDTO } from './types'
 
@@ -72,19 +73,49 @@ export default function GoalPage({ go }: GoalPageProps) {
     load()
   }, [load])
 
+  /** 按历史数据个性化的建议值（metric code → 建议目标值），无历史时回落 METRICS 静态默认 */
+  const [suggests, setSuggests] = useState<Record<number, number>>({})
+
+  const STATIC_SUGGEST: Record<number, number> = { 1: 80, 2: 4, 3: 3000, 4: 600, 5: 30, 6: 30000 }
+
+  const suggestFor = (code: number) => suggests[code] ?? STATIC_SUGGEST[code] ?? metricMeta(code)?.suggest ?? 80
+
   const openCreate = () => {
     setMetric(1)
     setFormYear(year)
     setFormMonth(new Date().getMonth() + 1)
-    setTarget(String(metricMeta(1)?.suggest ?? 80))
+    setTarget(String(STATIC_SUGGEST[1]))
     setFormError('')
     setFormOpen(true)
+    // 借鉴 Keep/Strava：新目标基于个人历史给出「跳一跳够得着」的建议值，
+    // 而不是所有人共用一个写死的数。今年已过 N 个月 → 月均 × 1.1；年度同理外推
+    journalApi
+      .summary()
+      .then((s) => {
+        const months = Math.max(1, new Date().getMonth() + 1)
+        const next: Record<number, number> = {}
+        if (s.thisYearDistanceKm > 0 || s.thisYearCount > 0) {
+          next[1] = Math.max(10, Math.round((s.thisYearDistanceKm / months) * 1.1))
+          next[2] = Math.max(2, Math.round((s.thisYearCount / months) * 1.1))
+          next[4] = Math.max(50, Math.round(next[1] * 12))
+          next[5] = Math.max(6, Math.round(next[2] * 12))
+          // 爬升按「每公里平均爬升 × 建议里程」推算（有里程数据才有意义）
+          if (s.totalDistanceKm > 0 && s.totalElevationGain > 0) {
+            const perKm = s.totalElevationGain / s.totalDistanceKm
+            next[3] = Math.max(500, Math.round((perKm * next[1]) / 10) * 10)
+            next[6] = Math.max(5000, Math.round((perKm * next[4]) / 100) * 100)
+          }
+          setSuggests(next)
+          // 建议值到达后覆盖初始值（openCreate 固定从指标 1 开始；用户此刻改选的概率极低）
+          setTarget(String(next[1] ?? STATIC_SUGGEST[1]))
+        }
+      })
+      .catch(() => {})
   }
 
   const pickMetric = (code: number) => {
     setMetric(code)
-    const meta = metricMeta(code)
-    setTarget(String(meta?.suggest ?? 80))
+    setTarget(String(suggestFor(code)))
   }
 
   const handleSubmit = async () => {
