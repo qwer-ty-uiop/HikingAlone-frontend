@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, Circle, Plus, Trash, Copy, WarningCircle, X } from '@phosphor-icons/react'
+import { CheckCircle, Circle, Plus, Trash, Copy, WarningCircle, X, Sparkle } from '@phosphor-icons/react'
 import { gearChecklistApi } from './api'
 import { CATEGORY_LABELS } from './GearItemFormModal'
 import type { GearChecklist, GearItem } from './types'
@@ -29,12 +29,19 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
   const [fromGearId, setFromGearId] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // 智能生成：按行程参数从装备库自动选入（借鉴马蜂窝/两步路的出行清单模板思路）
+  const [smartOpen, setSmartOpen] = useState(false)
+  const [smartMulti, setSmartMulti] = useState(false)
+  const [smartDistance, setSmartDistance] = useState('10')
+  const [generating, setGenerating] = useState(false)
+
   useEffect(() => {
     setError('')
     setNewName('')
     setNewWeight('')
     setFromGearId('')
     setConfirmDelete(false)
+    setSmartOpen(false)
   }, [checklist?.id])
 
   if (!checklist) return null
@@ -58,6 +65,53 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
       onChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : '删除失败')
+    }
+  }
+
+  /**
+   * 智能生成规则（借鉴主流徒步产品的清单模板）：
+   * 必选 = 背包/鞋袜/照明/导航/安全急救；8km+ 带炊具饮水；5km+ 带电子设备；
+   * 15km+ 或过夜换洗衣物；过夜加帐篷天幕与睡袋防潮垫。已在清单里的条目自动去重
+   */
+  const handleSmartFill = async () => {
+    if (!checklist) return
+    const distance = Number(smartDistance)
+    if (Number.isNaN(distance) || distance < 0) {
+      setError('请填写有效里程')
+      return
+    }
+    const always = new Set([1, 4, 7, 8, 9])
+    const picked = inServiceGear.filter((g) => {
+      if (always.has(g.category)) return true
+      if (g.category === 6) return distance >= 8
+      if (g.category === 10) return distance >= 5
+      if (g.category === 5) return smartMulti || distance >= 15
+      if (g.category === 2 || g.category === 3) return smartMulti
+      return false
+    })
+    const existing = new Set(checklist.items.map((i) => i.name))
+    const toAdd = picked.filter((g) => !existing.has(g.name))
+    if (toAdd.length === 0) {
+      setError('按这个行程，装备库里的建议装备都已经在清单里了')
+      return
+    }
+    setGenerating(true)
+    setError('')
+    try {
+      for (const g of toAdd) {
+        await gearChecklistApi.addItem({
+          checklistId: checklist.id,
+          gearItemId: g.id,
+          name: g.name,
+          weightGrams: g.weightGrams ?? undefined,
+        })
+      }
+      setSmartOpen(false)
+      onChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '生成失败')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -193,8 +247,57 @@ export default function ChecklistDetailModal({ checklist, gearItems, onClose, on
             ))}
           </div>
 
+          {/* 智能生成面板 */}
+          <div className="mb-4">
+            <button
+              onClick={() => setSmartOpen(!smartOpen)}
+              className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full transition-colors active:scale-[0.98]"
+            >
+              <Sparkle size={12} weight="fill" />
+              按行程智能生成
+            </button>
+            {smartOpen && (
+              <div className="mt-2.5 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-500">行程类型</span>
+                  <div className="flex gap-1 rounded-full bg-white p-0.5 border border-slate-200">
+                    {[false, true].map((multi) => (
+                      <button
+                        key={String(multi)}
+                        onClick={() => setSmartMulti(multi)}
+                        className={`px-3 py-1 text-xs rounded-full transition-all ${
+                          smartMulti === multi ? 'bg-emerald-600 text-white' : 'text-slate-500'
+                        }`}
+                      >
+                        {multi ? '过夜重装' : '单日往返'}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-slate-500 ml-2">计划里程</span>
+                  <input
+                    className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-mono outline-none focus:border-emerald-400"
+                    type="number"
+                    value={smartDistance}
+                    onChange={(e) => setSmartDistance(e.target.value)}
+                  />
+                  <span className="text-xs text-slate-400">km</span>
+                  <button
+                    onClick={handleSmartFill}
+                    disabled={generating}
+                    className="ml-auto px-4 py-1.5 rounded-full bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-60"
+                  >
+                    {generating ? '生成中…' : '一键生成'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  背包、鞋袜、照明、导航、急救始终带上；8km+ 加炊具饮水，5km+ 加电子设备，15km+ 或过夜加换洗衣物，过夜加帐篷睡袋。已生成的条目自动去重。
+                </p>
+              </div>
+            )}
+          </div>
+
           {checklist.items.length === 0 && (
-            <p className="py-8 text-center text-sm text-slate-300">清单还是空的，从下面加一条</p>
+            <p className="py-8 text-center text-sm text-slate-300">清单还是空的，点上面的「智能生成」试试</p>
           )}
           <div className="divide-y divide-slate-50">
             {checklist.items.map((item) => (
