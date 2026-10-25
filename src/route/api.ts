@@ -2,6 +2,13 @@ import type { RouteCreateDTO, RouteHot, RouteTrack, RouteTrackDetail } from './t
 
 const SUCCESS_CODE = 200
 
+/** 非 JSON 响应（nginx 限流 429 / 网关 503 等 HTML 错误页）的状态码友好文案 */
+function statusMessage(status: number): string {
+  if (status === 429) return '操作过于频繁，请稍后再试'
+  if (status === 503) return '服务暂时不可用，请稍后再试'
+  return `请求失败（HTTP ${status}）`
+}
+
 /** 与 App.tsx 的 REDIRECT_KEY 同一 key：登录后回跳目标页（请求层无法 import 组件层，故各自定义、保持字面量一致） */
 const REDIRECT_KEY = 'hikingalone.redirect'
 
@@ -25,7 +32,18 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     }
     throw new Error('未登录，请先登录')
   }
-  const result = await res.json()
+  // 非 JSON 响应体（如 nginx 限流 429 / 网关 503 的 HTML 错误页）：res.json() 会抛
+  // SyntaxError 变成通用错误，这里按状态码给出友好文案
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    throw new Error(statusMessage(res.status))
+  }
+  let result
+  try {
+    result = await res.json()
+  } catch {
+    throw new Error(statusMessage(res.status))
+  }
   if (result.code !== SUCCESS_CODE) {
     throw new Error(result.message || '请求失败')
   }
