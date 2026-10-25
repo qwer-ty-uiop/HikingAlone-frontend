@@ -30,7 +30,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     if (window.location.pathname !== '/login') {
       sessionStorage.setItem(REDIRECT_KEY, window.location.pathname)
     }
-    window.location.href = '/login'
+    window.location.href = '/login?expired=1'   // expired 标记驱动登录页展示「登录已过期」提示
     throw new Error('未登录，请先登录')
   }
   const result = await res.json()

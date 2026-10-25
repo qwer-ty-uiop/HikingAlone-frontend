@@ -10,6 +10,7 @@ import {
   EyeSlash,
   CheckCircle,
   CircleNotch,
+  WarningCircle,
 } from '@phosphor-icons/react'
 import { userApi } from './api'
 
@@ -283,6 +284,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function AuthPage({ go, onLogin }: AuthPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
+  // 会话过期跳转标记（request.ts 401 → /login?expired=1）：读一次即清 URL，避免刷新重复提示
+  const [sessionExpired] = useState(() => {
+    const hit = new URLSearchParams(window.location.search).get('expired') === '1'
+    if (hit) window.history.replaceState({}, '', '/login')
+    return hit
+  })
   const [showForget, setShowForget] = useState(false)
 
   // 登录
@@ -554,6 +561,12 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                 <p className="text-sm text-slate-500 mt-1.5 mb-7">
                   {mode === 'login' ? '登录后继续你的徒步计划' : '加入 Hiking Alone，开始记录每一次坚持'}
                 </p>
+                {mode === 'login' && sessionExpired && (
+                  <div className="mb-5 flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+                    <WarningCircle size={15} weight="bold" />
+                    登录已过期，请重新登录
+                  </div>
+                )}
 
                 {mode === 'login' ? (
                   <div className="space-y-4">
