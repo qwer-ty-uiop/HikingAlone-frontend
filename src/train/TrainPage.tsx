@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import { motion, useMotionValue, useMotionValueEvent, useSpring } from 'framer-motion'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { animate, motion, useMotionValue, useSpring } from 'framer-motion'
 import { ArrowLeft, Plus, CalendarBlank, PencilSimple, TrashSimple, CheckCircle, Prohibit, MagnifyingGlass, X } from '@phosphor-icons/react'
 import { trainApi } from './api'
 import Heatmap, { type RecentRecord } from './Heatmap'
@@ -44,14 +44,22 @@ const listItem = {
   show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100, damping: 20 } as const },
 }
 
-/** 数字滚动：值变化时弹簧过渡（订阅 motion value 的渲染值到 state，避免 motion value 直接作 children 渲染异常） */
+/** 数字滚动：display 初始化为当前值（useSpring 挂载竞态下 change 可能不触发，曾卡 0），值变化时弹簧过渡 */
 function CountUp({ value, className }: { value: number; className?: string }) {
-  const spring = useSpring(useMotionValue(0), { stiffness: 100, damping: 20 })
-  const [display, setDisplay] = useState(0)
-  useMotionValueEvent(spring, 'change', (v) => setDisplay(Math.round(v)))
+  const [display, setDisplay] = useState(value)
+  const prev = useRef(value)
   useEffect(() => {
-    spring.set(value)
-  }, [value, spring])
+    const from = prev.current
+    prev.current = value
+    if (from === value) return
+    const controls = animate(from, value, {
+      type: 'spring',
+      stiffness: 100,
+      damping: 20,
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [value])
   return <span className={className}>{display}</span>
 }
 

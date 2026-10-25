@@ -1,15 +1,26 @@
 /** 新模块共享的动效与列表基础组件（train/route/body 各有本地副本，历史保留不动） */
-import { useEffect, useState, type ReactNode } from 'react'
-import { motion, useMotionValue, useMotionValueEvent, useSpring } from 'framer-motion'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { animate, motion, useMotionValue, useSpring } from 'framer-motion'
 
-/** 数字滚动：值变化时弹簧过渡（整数展示） */
+/**
+ * 数字滚动：display 初始化为当前值（正确性不依赖动画事件——useSpring 订阅在挂载竞态下
+ * 可能不触发 change，曾导致带初值挂载时永远显示 0），值变化时弹簧过渡
+ */
 export function CountUp({ value, className }: { value: number; className?: string }) {
-  const spring = useSpring(useMotionValue(0), { stiffness: 100, damping: 20 })
-  const [display, setDisplay] = useState(0)
-  useMotionValueEvent(spring, 'change', (v) => setDisplay(Math.round(v)))
+  const [display, setDisplay] = useState(value)
+  const prev = useRef(value)
   useEffect(() => {
-    spring.set(value)
-  }, [value, spring])
+    const from = prev.current
+    prev.current = value
+    if (from === value) return
+    const controls = animate(from, value, {
+      type: 'spring',
+      stiffness: 100,
+      damping: 20,
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [value])
   return <span className={className}>{display}</span>
 }
 
@@ -23,12 +34,20 @@ export function CountUpDecimal({
   digits?: number
   className?: string
 }) {
-  const spring = useSpring(useMotionValue(0), { stiffness: 100, damping: 20 })
-  const [display, setDisplay] = useState(0)
-  useMotionValueEvent(spring, 'change', (v) => setDisplay(v))
+  const [display, setDisplay] = useState(value)
+  const prev = useRef(value)
   useEffect(() => {
-    spring.set(value)
-  }, [value, spring])
+    const from = prev.current
+    prev.current = value
+    if (from === value) return
+    const controls = animate(from, value, {
+      type: 'spring',
+      stiffness: 100,
+      damping: 20,
+      onUpdate: (v) => setDisplay(v),
+    })
+    return () => controls.stop()
+  }, [value])
   return <span className={className}>{display.toFixed(digits)}</span>
 }
 

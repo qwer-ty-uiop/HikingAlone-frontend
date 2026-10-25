@@ -53,6 +53,7 @@ function Field({
   helper,
   error,
   autoFocus,
+  onEnter,
 }: {
   label: string
   icon: React.ReactNode
@@ -63,6 +64,8 @@ function Field({
   helper?: string
   error?: string
   autoFocus?: boolean
+  /** 回车回调：登录表单等单键提现场景（表单未用 <form>，Enter 需显式处理） */
+  onEnter?: () => void
 }) {
   const [visible, setVisible] = useState(false)
   const isPassword = type === 'password'
@@ -77,6 +80,9 @@ function Field({
           type={isPassword ? (visible ? 'text' : 'password') : type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && onEnter) onEnter()
+          }}
           placeholder={placeholder}
           autoFocus={autoFocus}
           className={`w-full pl-10 ${isPassword ? 'pr-10' : 'pr-3.5'} py-2.5 text-sm rounded-xl border bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all placeholder:text-slate-400 ${
@@ -568,6 +574,7 @@ export default function AuthPage({ go, onLogin }: AuthPageProps) {
                       onChange={setLoginPassword}
                       placeholder="请输入密码"
                       error={loginFieldError.password}
+                      onEnter={submitLogin}
                     />
 
                     {loginError && (

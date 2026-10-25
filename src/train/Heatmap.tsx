@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useState } from 'react'
-import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, useSpring } from 'framer-motion'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { animate, motion, AnimatePresence } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { CalendarCheck, PencilSimple, Check, X } from '@phosphor-icons/react'
 import { trainApi } from './api'
@@ -138,15 +138,22 @@ const GridCell = memo(function GridCell({
 /** 左侧星期标签列：只在周一/周三/周五显示 */
 const WEEK_ROW_LABELS = ['', '一', '', '三', '', '五', '']
 
-/** 数字滚动：值变化时从旧值弹簧过渡到新值（订阅 motion value 到 state，避免渲染异常） */
+/** 数字滚动：display 初始化为当前值（useSpring 挂载竞态下 change 可能不触发，曾卡 0），值变化时弹簧过渡 */
 function CountUp({ value, className }: { value: number; className?: string }) {
-  const mv = useMotionValue(0)
-  const spring = useSpring(mv, { stiffness: 100, damping: 20 })
-  const [display, setDisplay] = useState(0)
-  useMotionValueEvent(spring, 'change', (v) => setDisplay(Math.round(v)))
+  const [display, setDisplay] = useState(value)
+  const prev = useRef(value)
   useEffect(() => {
-    mv.set(value)
-  }, [value, mv])
+    const from = prev.current
+    prev.current = value
+    if (from === value) return
+    const controls = animate(from, value, {
+      type: 'spring',
+      stiffness: 100,
+      damping: 20,
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [value])
   return <span className={className}>{display}</span>
 }
 
