@@ -16,10 +16,13 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   })
   // 401 未登录：会话缺失/过期，记下当前页供登录后回跳，再跳登录页
   if (res.status === 401) {
+    // 只在不在登录页时跳转：带 expired 标记驱动「登录已过期」提示；已在登录页只抛错
+    // （App 会清本地登录态）。若此处无条件跳转，登录页挂载仍调 /user/me → 401 → 再跳，
+    // 与 AuthPage 清理后的 /login 不同 URL 会整页重载，形成刷新循环
     if (window.location.pathname !== '/login') {
       sessionStorage.setItem(REDIRECT_KEY, window.location.pathname)
+      window.location.href = '/login?expired=1'
     }
-    window.location.href = '/login?expired=1'   // expired 标记驱动登录页展示「登录已过期」提示
     throw new Error('未登录，请先登录')
   }
   const result = await res.json()
