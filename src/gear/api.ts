@@ -17,7 +17,7 @@ export const gearItemApi = {
   /** GET /gear/items 全量装备（在役在前） */
   list: () => request<GearItem[]>('/gear/items'),
 
-  /** GET /gear/catalog 常用装备目录联想（平台级共享数据；keyword 可空浏览，limit 缺省 10、钳制 1~20） */
+  /** GET /gear/items/catalog 常用装备目录联想（平台级共享数据；keyword 可空浏览，limit 缺省 10、钳制 1~20） */
   catalog: (keyword?: string, limit?: number) => {
     const params = new URLSearchParams()
     if (keyword?.trim()) params.set('keyword', keyword.trim())
