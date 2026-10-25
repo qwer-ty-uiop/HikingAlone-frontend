@@ -4,6 +4,24 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // 500kB 默认阈值针对首屏包；唯一超限的 maplibre chunk（969kB min / 255kB gzip）已随
+    // 路线页懒加载移出首屏（见 App.tsx），只在实际打开地图时下载，故阈值放宽到 1000kB
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // 按大依赖拆 vendor chunk：应用代码迭代只重新下载业务 chunk，稳定的第三方库
+        // 走浏览器长缓存；多 chunk 并行下载也快于单个 1.7MB 大包
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('maplibre-gl')) return 'maplibre' // WebGL 地图引擎，体量最大单独拆
+          if (id.includes('framer-motion')) return 'framer-motion'
+          if (id.includes('@phosphor-icons') || id.includes('lucide-react')) return 'icons'
+          return 'vendor' // react / react-dom / @tmcw/togeojson 等
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import {
   MapPin,
@@ -19,7 +19,9 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react'
 import TrainPage from './train/TrainPage'
-import RoutePage from './route/RoutePage'
+// 路线页懒加载：唯一重依赖 maplibre-gl（~970kB min / 255kB gzip + 83kB css）只随本页按需加载，
+// 首屏不再下载地图引擎；其余页面体量小，保持同步 import（首访无 Suspense 闪屏）
+const RoutePage = lazy(() => import('./route/RoutePage'))
 import BodyPage from './body/BodyPage'
 import JournalPage from './journal/JournalPage'
 import DailyPage from './daily/DailyPage'
@@ -138,7 +140,11 @@ function App() {
     if (!sessionChecked) {
       return <SessionChecking />
     }
-    return <ProtectedPage go={go} />
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <ProtectedPage go={go} />
+      </Suspense>
+    )
   }
 
   if (path === '/login') {
@@ -184,6 +190,15 @@ function SessionChecking() {
         <div className="mx-auto w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
         <p className="mt-4 text-sm text-slate-400">正在确认登录状态…</p>
       </div>
+    </div>
+  )
+}
+
+/** 懒加载页面（路线页）首次加载时的占位 */
+function PageLoading() {
+  return (
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+      <div className="mx-auto w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
     </div>
   )
 }
